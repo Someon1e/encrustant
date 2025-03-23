@@ -48,6 +48,7 @@ pub(crate) const DEFAULT_TUNABLES: Tunable = Tunable {
     iir_depth_reduction: 1,
 
     static_null_min_depth: 7,
+    static_null_margin: 55,
 
     lmp_base: 2,
 
@@ -55,8 +56,7 @@ pub(crate) const DEFAULT_TUNABLES: Tunable = Tunable {
     nmp_base_reduction: 3,
     nmp_ply_divisor: 4,
 
-    futility_margin: 116,
-    static_null_margin: 58,
+    futility_margin: 111,
 
     lmr_base: 2048,
 
@@ -70,7 +70,7 @@ pub(crate) const DEFAULT_TUNABLES: Tunable = Tunable {
     aspiration_window_growth: 40,
     aspiration_window_count: 4,
 
-    improving_static_null_margin: 41,
+    improving_static_null_margin: 39,
     pawn_correction_history_grain: 244,
 
     minor_piece_correction_history_grain: 256,
