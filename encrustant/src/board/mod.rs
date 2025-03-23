@@ -23,6 +23,7 @@ use square::Square;
 
 use self::game_state::GameState;
 
+#[derive(Clone)]
 /// Represents a chess position.
 pub struct Board {
     /// Whether it is white's turn to move.
