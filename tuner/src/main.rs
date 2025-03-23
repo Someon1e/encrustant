@@ -3,14 +3,14 @@
 
 use encrustant::board::Board;
 use encrustant::evaluation::Eval;
-use encrustant::evaluation::eval_data::PieceSquareTable;
+use encrustant::evaluation::eval_data::{EvalNumber, PieceSquareTable};
 use rayon::prelude::*;
 use std::io::BufRead;
 use std::time::Instant;
 use std::{fs::File, io::BufReader};
 
 fn parse_data_set() -> Vec<(Board, f64)> {
-    let file = File::open("dataset/positions.txt").expect("Failed to open file");
+    let file = File::open("dataset/result.lfs").expect("Failed to open file");
     let data_set = BufReader::new(file);
     let mut parsed = Vec::with_capacity(2_000_000);
 
@@ -56,7 +56,7 @@ fn mean_square_error(
                 ) * if board.white_to_move { 1 } else { -1 },
             );
 
-            let sigmoid = 1.0 / (1.0 + f64::powf(10.0, -k * score / 400.0));
+            let sigmoid = 1.0 / (1.0 + f64::exp(-k * score / 400.0));
 
             let error = result - sigmoid;
             error * error
@@ -233,128 +233,140 @@ fn find_k(
 }
 
 fn main() {
+    const MP: i16 = 85;
+    const MN: i16 = 285;
+    const MB: i16 = 313;
+    const MR: i16 = 446;
+    const MQ: i16 = 864;
+    const MK: i16 = -28;
+
+    const EP: i16 = 123;
+    const EN: i16 = 256;
+    const EB: i16 = 275;
+    const ER: i16 = 475;
+    const EQ: i16 = 893;
+    const EK: i16 = 9;
+
     #[rustfmt::skip]
     let middle_game_piece_square_tables: PieceSquareTable = [
        0,   0,   0,   0,   0,   0,   0,   0,
-     100, 100, 100, 100, 100, 100, 100, 100,
-     100, 100, 100, 100, 100, 100, 100, 100,
-     100, 100, 100, 100, 100, 100, 100, 100,
-     100, 100, 100, 100, 100, 100, 100, 100,
-     100, 100, 100, 100, 100, 100, 100, 100,
-     100, 100, 100, 100, 100, 100, 100, 100,
+      MP,  MP,  MP,  MP,  MP,  MP,  MP,  MP,
+      MP,  MP,  MP,  MP,  MP,  MP,  MP,  MP,
+      MP,  MP,  MP,  MP,  MP,  MP,  MP,  MP,
+      MP,  MP,  MP,  MP,  MP,  MP,  MP,  MP,
+      MP,  MP,  MP,  MP,  MP,  MP,  MP,  MP,
+      MP,  MP,  MP,  MP,  MP,  MP,  MP,  MP,
        0,   0,   0,   0,   0,   0,   0,   0,
 
 
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
+      MN,  MN,  MN,  MN,  MN,  MN,  MN,  MN,
+      MN,  MN,  MN,  MN,  MN,  MN,  MN,  MN,
+      MN,  MN,  MN,  MN,  MN,  MN,  MN,  MN,
+      MN,  MN,  MN,  MN,  MN,  MN,  MN,  MN,
+      MN,  MN,  MN,  MN,  MN,  MN,  MN,  MN,
+      MN,  MN,  MN,  MN,  MN,  MN,  MN,  MN,
+      MN,  MN,  MN,  MN,  MN,  MN,  MN,  MN,
+      MN,  MN,  MN,  MN,  MN,  MN,  MN,  MN,
+
+      MB,  MB,  MB,  MB,  MB,  MB,  MB,  MB,
+      MB,  MB,  MB,  MB,  MB,  MB,  MB,  MB,
+      MB,  MB,  MB,  MB,  MB,  MB,  MB,  MB,
+      MB,  MB,  MB,  MB,  MB,  MB,  MB,  MB,
+      MB,  MB,  MB,  MB,  MB,  MB,  MB,  MB,
+      MB,  MB,  MB,  MB,  MB,  MB,  MB,  MB,
+      MB,  MB,  MB,  MB,  MB,  MB,  MB,  MB,
+      MB,  MB,  MB,  MB,  MB,  MB,  MB,  MB,
 
 
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
+      MR,  MR,  MR,  MR,  MR,  MR,  MR,  MR,
+      MR,  MR,  MR,  MR,  MR,  MR,  MR,  MR,
+      MR,  MR,  MR,  MR,  MR,  MR,  MR,  MR,
+      MR,  MR,  MR,  MR,  MR,  MR,  MR,  MR,
+      MR,  MR,  MR,  MR,  MR,  MR,  MR,  MR,
+      MR,  MR,  MR,  MR,  MR,  MR,  MR,  MR,
+      MR,  MR,  MR,  MR,  MR,  MR,  MR,  MR,
+      MR,  MR,  MR,  MR,  MR,  MR,  MR,  MR,
 
 
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
+      MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,
+      MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,
+      MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,
+      MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,
+      MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,
+      MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,
+      MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,
+      MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,  MQ,
 
 
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
-
-
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
+      MK,  MK,  MK,  MK,  MK,  MK,  MK,  MK,
+      MK,  MK,  MK,  MK,  MK,  MK,  MK,  MK,
+      MK,  MK,  MK,  MK,  MK,  MK,  MK,  MK,
+      MK,  MK,  MK,  MK,  MK,  MK,  MK,  MK,
+      MK,  MK,  MK,  MK,  MK,  MK,  MK,  MK,
+      MK,  MK,  MK,  MK,  MK,  MK,  MK,  MK,
+      MK,  MK,  MK,  MK,  MK,  MK,  MK,  MK,
+      MK,  MK,  MK,  MK,  MK,  MK,  MK,  MK,
     ];
 
     #[rustfmt::skip]
     let end_game_piece_square_tables: PieceSquareTable = [
-        0,   0,   0,   0,   0,   0,   0,   0,
-      100, 100, 100, 100, 100, 100, 100, 100,
-      100, 100, 100, 100, 100, 100, 100, 100,
-      100, 100, 100, 100, 100, 100, 100, 100,
-      100, 100, 100, 100, 100, 100, 100, 100,
-      100, 100, 100, 100, 100, 100, 100, 100,
-      100, 100, 100, 100, 100, 100, 100, 100,
-        0,   0,   0,   0,   0,   0,   0,   0,
-
-
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-
-
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-
-
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-
-
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-
-
       0,   0,   0,   0,   0,   0,   0,   0,
+     EP,  EP,  EP,  EP,  EP,  EP,  EP,  EP,
+     EP,  EP,  EP,  EP,  EP,  EP,  EP,  EP,
+     EP,  EP,  EP,  EP,  EP,  EP,  EP,  EP,
+     EP,  EP,  EP,  EP,  EP,  EP,  EP,  EP,
+     EP,  EP,  EP,  EP,  EP,  EP,  EP,  EP,
+     EP,  EP,  EP,  EP,  EP,  EP,  EP,  EP,
       0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
+
+
+     EN,  EN,  EN,  EN,  EN,  EN,  EN,  EN,
+     EN,  EN,  EN,  EN,  EN,  EN,  EN,  EN,
+     EN,  EN,  EN,  EN,  EN,  EN,  EN,  EN,
+     EN,  EN,  EN,  EN,  EN,  EN,  EN,  EN,
+     EN,  EN,  EN,  EN,  EN,  EN,  EN,  EN,
+     EN,  EN,  EN,  EN,  EN,  EN,  EN,  EN,
+     EN,  EN,  EN,  EN,  EN,  EN,  EN,  EN,
+     EN,  EN,  EN,  EN,  EN,  EN,  EN,  EN,
+
+     EB,  EB,  EB,  EB,  EB,  EB,  EB,  EB,
+     EB,  EB,  EB,  EB,  EB,  EB,  EB,  EB,
+     EB,  EB,  EB,  EB,  EB,  EB,  EB,  EB,
+     EB,  EB,  EB,  EB,  EB,  EB,  EB,  EB,
+     EB,  EB,  EB,  EB,  EB,  EB,  EB,  EB,
+     EB,  EB,  EB,  EB,  EB,  EB,  EB,  EB,
+     EB,  EB,  EB,  EB,  EB,  EB,  EB,  EB,
+     EB,  EB,  EB,  EB,  EB,  EB,  EB,  EB,
+
+
+     ER,  ER,  ER,  ER,  ER,  ER,  ER,  ER,
+     ER,  ER,  ER,  ER,  ER,  ER,  ER,  ER,
+     ER,  ER,  ER,  ER,  ER,  ER,  ER,  ER,
+     ER,  ER,  ER,  ER,  ER,  ER,  ER,  ER,
+     ER,  ER,  ER,  ER,  ER,  ER,  ER,  ER,
+     ER,  ER,  ER,  ER,  ER,  ER,  ER,  ER,
+     ER,  ER,  ER,  ER,  ER,  ER,  ER,  ER,
+     ER,  ER,  ER,  ER,  ER,  ER,  ER,  ER,
+
+
+     EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,
+     EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,
+     EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,
+     EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,
+     EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,
+     EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,
+     EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,
+     EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,  EQ,
+
+
+     EK,  EK,  EK,  EK,  EK,  EK,  EK,  EK,
+     EK,  EK,  EK,  EK,  EK,  EK,  EK,  EK,
+     EK,  EK,  EK,  EK,  EK,  EK,  EK,  EK,
+     EK,  EK,  EK,  EK,  EK,  EK,  EK,  EK,
+     EK,  EK,  EK,  EK,  EK,  EK,  EK,  EK,
+     EK,  EK,  EK,  EK,  EK,  EK,  EK,  EK,
+     EK,  EK,  EK,  EK,  EK,  EK,  EK,  EK,
+     EK,  EK,  EK,  EK,  EK,  EK,  EK,  EK,
     ];
 
     let phases: [i32; 5] = [
@@ -373,16 +385,18 @@ fn main() {
     );
 
     let k_start_time = Instant::now();
-    let k = find_k(
-        &data_set,
-        &middle_game_piece_square_tables,
-        &end_game_piece_square_tables,
-        &phases,
-    );
-    println!(
-        "Found k: {k} in {} seconds",
-        k_start_time.elapsed().as_secs_f64()
-    );
+    let k = 4.0 * f64::ln(3.0);
+    dbg!(k);
+    // let k = find_k(
+    //     &data_set,
+    //     &middle_game_piece_square_tables,
+    //     &end_game_piece_square_tables,
+    //     &phases,
+    // );
+    // println!(
+    //     "Found k: {k} in {} seconds",
+    //     k_start_time.elapsed().as_secs_f64()
+    // );
 
     let tune_start_time = Instant::now();
     tune(
