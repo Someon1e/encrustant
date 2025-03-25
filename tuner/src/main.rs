@@ -1,15 +1,16 @@
 #![deny(clippy::all)]
 #![warn(clippy::nursery)]
 
+mod evaluation;
+
 use encrustant::board::Board;
-use encrustant::evaluation::Eval;
-use encrustant::evaluation::eval_data::PieceSquareTable;
+use evaluation::{DataPoint, PARAMETER_COUNT, get_active, get_piece_counts, get_total_phase};
 use rayon::prelude::*;
 use std::io::BufRead;
 use std::time::Instant;
 use std::{fs::File, io::BufReader};
 
-fn parse_data_set() -> Vec<(Board, f64)> {
+fn parse_data_set() -> Vec<DataPoint> {
     let file = File::open("dataset/positions.txt").expect("Failed to open file");
     let data_set = BufReader::new(file);
     let mut parsed = Vec::with_capacity(2_000_000);
@@ -30,35 +31,38 @@ fn parse_data_set() -> Vec<(Board, f64)> {
         };
 
         let board = Board::from_fen(fen).unwrap();
-        parsed.push((board, result));
+        let active = get_active(&board);
+        let piece_counts = get_piece_counts(&board);
+        parsed.push(DataPoint {
+            active,
+            result,
+            piece_counts,
+        });
     }
     parsed.shrink_to_fit();
 
     parsed
 }
 
+fn sigmoid(score: f64) -> f64 {
+    1.0 / (1.0 + f64::exp(-score / 400.0))
+}
+
 fn mean_square_error(
-    data_set: &[(Board, f64)],
+    data_set: &[DataPoint],
     k: f64,
-    middle_game_piece_square_tables: &PieceSquareTable,
-    end_game_piece_square_tables: &PieceSquareTable,
-    phases: &[i32; 5],
+    parameters: &[(f64, f64)],
+    phase_weights: &[f64; 5],
 ) -> f64 {
     let total_square_error: f64 = data_set
         .par_iter()
-        .map(|(board, result)| {
-            let score = f64::from(
-                Eval::evaluate_with_parameters(
-                    middle_game_piece_square_tables,
-                    end_game_piece_square_tables,
-                    phases,
-                    board,
-                ) * if board.white_to_move { 1 } else { -1 },
-            );
+        .map(|data_point| {
+            let phase = data_point.get_phase(phase_weights);
+            let score = data_point.evaluate(parameters, phase);
 
-            let sigmoid = 1.0 / (1.0 + f64::powf(10.0, -k * score / 400.0));
+            let sigmoid = sigmoid(k * score);
 
-            let error = result - sigmoid;
+            let error = data_point.result - sigmoid;
             error * error
         })
         .sum();
@@ -66,137 +70,134 @@ fn mean_square_error(
     total_square_error / data_set.len() as f64
 }
 
-fn pretty_piece_square_tables(piece_square_tables: PieceSquareTable) -> String {
+fn compute_gradients(
+    data_set: &[DataPoint],
+    k: f64,
+    parameters: &[(f64, f64); PARAMETER_COUNT],
+    phase_weights: &[f64; 5],
+) -> ([(f64, f64); PARAMETER_COUNT], [f64; 5]) {
+    let mut param_gradients = [(0.0, 0.0); PARAMETER_COUNT];
+    let mut phase_gradients = [0.0; 5];
+    let max_counts = [8.0, 2.0, 2.0, 2.0, 1.0];
+
+    for data_point in data_set {
+        let phase = data_point.get_phase(phase_weights);
+        let score = data_point.evaluate(parameters, phase);
+        let sigmoid_val = sigmoid(k * score);
+
+        let term = 2.0 * (sigmoid_val - data_point.result) * sigmoid_val * (1.0 - sigmoid_val) * k;
+
+        // Compute mid_total and end_total
+        let white_mid: f64 = data_point.active[0]
+            .iter()
+            .map(|&i| parameters[i as usize].0)
+            .sum();
+        let white_end: f64 = data_point.active[0]
+            .iter()
+            .map(|&i| parameters[i as usize].1)
+            .sum();
+        let black_mid: f64 = data_point.active[1]
+            .iter()
+            .map(|&i| parameters[i as usize].0)
+            .sum();
+        let black_end: f64 = data_point.active[1]
+            .iter()
+            .map(|&i| parameters[i as usize].1)
+            .sum();
+        let mid_total = white_mid - black_mid;
+        let end_total = white_end - black_end;
+        let error_term = term * (mid_total - end_total);
+
+        let current_phase: f64 = data_point
+            .piece_counts
+            .iter()
+            .enumerate()
+            .map(|(i, &count)| count * phase_weights[i])
+            .sum();
+        let max_phase = get_total_phase(phase_weights);
+
+        // Phase gradients
+        for i in 0..5 {
+            let count_i = data_point.piece_counts[i];
+            let max_count_i = max_counts[i];
+            let derivative =
+                count_i.mul_add(max_phase, -(current_phase * max_count_i)) / max_phase.powi(2);
+            phase_gradients[i] += error_term * derivative;
+        }
+
+        // Parameter gradients
+        let scores = (phase * term, (1.0 - phase) * term);
+        for index in &data_point.active[0] {
+            param_gradients[*index as usize].0 += scores.0;
+            param_gradients[*index as usize].1 += scores.1;
+        }
+        for index in &data_point.active[1] {
+            param_gradients[*index as usize].0 -= scores.0;
+            param_gradients[*index as usize].1 -= scores.1;
+        }
+    }
+
+    (param_gradients, phase_gradients)
+}
+
+fn compute_gradients_parallel(
+    data_set: &[DataPoint],
+    k: f64,
+    parameters: &[(f64, f64); PARAMETER_COUNT],
+    phase_weights: &[f64; 5],
+) -> ([(f64, f64); PARAMETER_COUNT], [f64; 5]) {
+    // Split the dataset into chunks for parallel processing
+    data_set
+        .par_chunks(262144)
+        .map(|chunk| compute_gradients(chunk, k, parameters, phase_weights))
+        .reduce(
+            || ([(0.0, 0.0); PARAMETER_COUNT], [0.0; 5]),
+            |mut a, b| {
+                let (a_params, a_phases) = &mut a;
+                let (b_params, b_phases) = b;
+
+                // Sum parameter gradients
+                for (i, param) in a_params.iter_mut().enumerate() {
+                    param.0 += b_params[i].0;
+                    param.1 += b_params[i].1;
+                }
+
+                // Sum phase gradients
+                for (i, phase) in a_phases.iter_mut().enumerate() {
+                    *phase += b_phases[i];
+                }
+
+                a
+            },
+        )
+}
+
+fn pretty_parameters(parameters: &[(f64, f64); PARAMETER_COUNT]) -> String {
     let mut output = String::new();
     output.push_str("[\n");
     for piece in 0..6 {
         for rank in 0..8 {
-            output.push('\n');
             for file in 0..8 {
                 output.push_str(&format!(
-                    "{:>4},",
-                    piece_square_tables[piece * 64 + rank * 8 + file]
+                    "({:>4}, {:<4}), ",
+                    parameters[piece * 64 + rank * 8 + file].0 as i16,
+                    parameters[piece * 64 + rank * 8 + file].1 as i16,
                 ));
             }
+            output.push('\n');
         }
-        output.push_str("\n\n");
+        if piece != 5 {
+            output.push_str("\n\n");
+        }
     }
     output.push(']');
     output
 }
 
-fn tune(
-    data_set: &[(Board, f64)],
-    k: f64,
-    middle_game_piece_square_tables: &PieceSquareTable,
-    end_game_piece_square_tables: &PieceSquareTable,
-    phases: &[i32; 5],
-) {
-    const PSQT_ADJUSTMENT_VALUE: i16 = 1;
-    const PHASE_ADJUSTMENT_VALUE: i32 = 1;
-
-    let mut best_error = mean_square_error(
-        data_set,
-        k,
-        middle_game_piece_square_tables,
-        end_game_piece_square_tables,
-        phases,
-    );
-    println!("Currently {best_error}");
-
-    let log_params = |psqt_1, psqt_2, new_phases| {
-        std::fs::write(
-            "tuned.rs",
-            format!(
-                "const MIDDLE_GAME_PIECE_SQUARE_TABLES: PieceSquareTable = {};
-const END_GAME_PIECE_SQUARE_TABLES: PieceSquareTable = {};
-const PHASES: [i32; 5] = {:#?};",
-                pretty_piece_square_tables(psqt_1),
-                pretty_piece_square_tables(psqt_2),
-                new_phases
-            ),
-        )
-        .unwrap();
-    };
-    log_params(
-        *middle_game_piece_square_tables,
-        *end_game_piece_square_tables,
-        *phases,
-    );
-
-    let mut best_psqt = [
-        *middle_game_piece_square_tables,
-        *end_game_piece_square_tables,
-    ];
-    let mut best_phases = *phases;
-    let mut improved = true;
-
-    while improved {
-        improved = false;
-
-        for table_number in 0..2 {
-            for index in 0..384 {
-                let mut new_psqts: [PieceSquareTable; 2] = best_psqt;
-                new_psqts[table_number][index] += PSQT_ADJUSTMENT_VALUE;
-
-                let mut new_error =
-                    mean_square_error(data_set, k, &new_psqts[0], &new_psqts[1], &best_phases);
-
-                if new_error < best_error {
-                    println!("{new_error} Found better params +");
-                } else {
-                    new_psqts[table_number][index] -= PSQT_ADJUSTMENT_VALUE * 2;
-                    new_error =
-                        mean_square_error(data_set, k, &new_psqts[0], &new_psqts[1], &best_phases);
-
-                    if new_error < best_error {
-                        println!("{new_error} Found better params -");
-                    } else {
-                        continue;
-                    }
-                }
-
-                improved = true;
-                best_error = new_error;
-                best_psqt = new_psqts;
-            }
-        }
-        for index in 0..5 {
-            let mut new_phases = best_phases;
-            new_phases[index] += PHASE_ADJUSTMENT_VALUE;
-
-            let mut new_error =
-                mean_square_error(data_set, k, &best_psqt[0], &best_psqt[1], &new_phases);
-
-            if new_error < best_error {
-                println!("{new_error} Found better params +");
-            } else {
-                new_phases[index] -= PHASE_ADJUSTMENT_VALUE * 2;
-                new_error =
-                    mean_square_error(data_set, k, &best_psqt[0], &best_psqt[1], &new_phases);
-
-                if new_error < best_error {
-                    println!("{new_error} Found better params -");
-                } else {
-                    continue;
-                }
-            }
-
-            improved = true;
-            best_error = new_error;
-            best_phases = new_phases;
-        }
-
-        log_params(best_psqt[0], best_psqt[1], best_phases);
-        println!("Finished one iteration");
-    }
-}
-
 fn find_k(
-    data_set: &[(Board, f64)],
-    middle_game_piece_square_tables: &PieceSquareTable,
-    end_game_piece_square_tables: &PieceSquareTable,
-    phases: &[i32; 5],
+    data_set: &[DataPoint],
+    parameters: &[(f64, f64); PARAMETER_COUNT],
+    phase_weights: &[f64; 5],
 ) -> f64 {
     let mut min = -10.0;
     let mut max = 10.0;
@@ -209,13 +210,7 @@ fn find_k(
         println!("Determining K: ({min} to {max}, {delta})");
 
         while min < max {
-            let error = mean_square_error(
-                data_set,
-                min,
-                middle_game_piece_square_tables,
-                end_game_piece_square_tables,
-                phases,
-            );
+            let error = mean_square_error(data_set, min, parameters, phase_weights);
             if error < best_error {
                 best_error = error;
                 best = min;
@@ -232,168 +227,157 @@ fn find_k(
     best
 }
 
+fn tune(
+    data_set: &[DataPoint],
+    k: f64,
+    mut parameters: [(f64, f64); 384],
+    mut phase_weights: [f64; 5],
+) {
+    const PARAM_LEARNING_RATE: f64 = 0.04;
+    const PHASE_LEARNING_RATE: f64 = 0.001;
+    const BETA1: f64 = 0.9;
+    const BETA2: f64 = 0.999;
+
+    let mut param_velocity = [(0.0, 0.0); 384];
+    let mut param_momentum = [(0.0, 0.0); 384];
+
+    let mut phase_velocity = [0.0; 384];
+    let mut phase_momentum = [0.0; 384];
+
+    let mut previous_error = f64::MAX;
+    let log_params = |parameters: &[(f64, f64); 384], phase_weights: &[f64; 5]| {
+        std::fs::write(
+            "tuned.rs",
+            format!(
+                "#[rustfmt::skip]
+pub const PIECE_SQUARE_TABLE: PieceSquareTable = {};
+
+pub const PHASE_WEIGHTS: [i32; 5] = {:?};",
+                pretty_parameters(parameters),
+                phase_weights
+                    .iter()
+                    .map(|x| *x as i32)
+                    .collect::<Vec<i32>>()
+            ),
+        )
+        .unwrap();
+    };
+    log_params(&parameters, &phase_weights);
+
+    let mut last_update = Instant::now();
+    for iteration in 0..8000 {
+        let (param_gradients, phase_gradients) =
+            compute_gradients_parallel(data_set, k, &parameters, &phase_weights);
+
+        // Update parameters
+        for (i, gradient) in param_gradients.iter().enumerate() {
+            param_momentum[i].0 = BETA1.mul_add(param_momentum[i].0, (1.0 - BETA1) * gradient.0);
+            param_momentum[i].1 = BETA1.mul_add(param_momentum[i].1, (1.0 - BETA1) * gradient.1);
+
+            param_velocity[i].0 =
+                BETA2.mul_add(param_velocity[i].0, (1.0 - BETA2) * gradient.0 * gradient.0);
+            param_velocity[i].1 =
+                BETA2.mul_add(param_velocity[i].1, (1.0 - BETA2) * gradient.1 * gradient.1);
+
+            parameters[i].0 -=
+                PARAM_LEARNING_RATE * param_momentum[i].0 / (1e-8 + param_velocity[i].0.sqrt());
+            parameters[i].1 -=
+                PARAM_LEARNING_RATE * param_momentum[i].1 / (1e-8 + param_velocity[i].1.sqrt());
+        }
+
+        // Update phase weights
+        for (i, gradient) in phase_gradients.iter().enumerate() {
+            phase_momentum[i] = BETA1.mul_add(phase_momentum[i], (1.0 - BETA1) * gradient);
+
+            phase_velocity[i] =
+                BETA2.mul_add(phase_velocity[i], (1.0 - BETA2) * gradient * gradient);
+
+            phase_weights[i] -=
+                PHASE_LEARNING_RATE * phase_momentum[i] / (1e-8 + phase_velocity[i].sqrt());
+        }
+
+        let error = mean_square_error(data_set, k, &parameters, &phase_weights);
+        println!("Iteration {}: MSE = {}", iteration, error);
+
+        if error < previous_error && last_update.elapsed().as_millis() > 500 {
+            log_params(&parameters, &phase_weights);
+            last_update = Instant::now();
+        }
+        previous_error = error;
+    }
+
+    println!("Finished");
+    log_params(&parameters, &phase_weights);
+}
+
 fn main() {
-    #[rustfmt::skip]
-    let middle_game_piece_square_tables: PieceSquareTable = [
-       0,   0,   0,   0,   0,   0,   0,   0,
-     100, 100, 100, 100, 100, 100, 100, 100,
-     100, 100, 100, 100, 100, 100, 100, 100,
-     100, 100, 100, 100, 100, 100, 100, 100,
-     100, 100, 100, 100, 100, 100, 100, 100,
-     100, 100, 100, 100, 100, 100, 100, 100,
-     100, 100, 100, 100, 100, 100, 100, 100,
-       0,   0,   0,   0,   0,   0,   0,   0,
+    let initial_phase_weights = [0.0, 100.0, 100.0, 200.0, 400.0];
 
+    let initial_parameters = {
+        let mut initial_parameters = [(0.0, 0.0); 384];
 
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
+        let mut index = 0;
 
+        // Pawn
+        for pawn_index in 0..64 {
+            if pawn_index > 7 && pawn_index < 56 {
+                initial_parameters[index] = (50.0, 90.0);
+            }
+            index += 1;
+        }
 
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
-     300, 300, 300, 300, 300, 300, 300, 300,
+        // Knight
+        for _ in 0..64 {
+            initial_parameters[index] = (225.0, 270.0);
+            index += 1;
+        }
 
+        // Bishop
+        for _ in 0..64 {
+            initial_parameters[index] = (250.0, 290.0);
+            index += 1;
+        }
 
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
-     500, 500, 500, 500, 500, 500, 500, 500,
+        // Rook
+        for _ in 0..64 {
+            initial_parameters[index] = (320.0, 500.0);
+            index += 1;
+        }
 
+        // Queen
+        for _ in 0..64 {
+            initial_parameters[index] = (710.0, 920.0);
+            index += 1;
+        }
 
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
-     900, 900, 900, 900, 900, 900, 900, 900,
+        // King
+        for _ in 0..64 {
+            initial_parameters[index] = (-80.0, 15.0);
+            index += 1;
+        }
 
-
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,   0,
-    ];
-
-    #[rustfmt::skip]
-    let end_game_piece_square_tables: PieceSquareTable = [
-        0,   0,   0,   0,   0,   0,   0,   0,
-      100, 100, 100, 100, 100, 100, 100, 100,
-      100, 100, 100, 100, 100, 100, 100, 100,
-      100, 100, 100, 100, 100, 100, 100, 100,
-      100, 100, 100, 100, 100, 100, 100, 100,
-      100, 100, 100, 100, 100, 100, 100, 100,
-      100, 100, 100, 100, 100, 100, 100, 100,
-        0,   0,   0,   0,   0,   0,   0,   0,
-
-
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-
-
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-      300, 300, 300, 300, 300, 300, 300, 300,
-
-
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-      500, 500, 500, 500, 500, 500, 500, 500,
-
-
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-      900, 900, 900, 900, 900, 900, 900, 900,
-
-
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-      0,   0,   0,   0,   0,   0,   0,   0,
-    ];
-
-    let phases: [i32; 5] = [
-        000, // Pawn
-        100, // Knight
-        100, // Bishop
-        200, // Rook
-        400, // Queen
-    ];
+        initial_parameters
+    };
 
     let data_set_start_time = Instant::now();
     let data_set = parse_data_set();
     println!(
-        "Parsed dataset in {} seconds",
+        "Parsed dataset in {:.1} seconds",
         data_set_start_time.elapsed().as_secs_f64()
     );
 
     let k_start_time = Instant::now();
-    let k = find_k(
-        &data_set,
-        &middle_game_piece_square_tables,
-        &end_game_piece_square_tables,
-        &phases,
-    );
+    // let k = find_k(&data_set, &parameters, &initial_phase_weights);
+    let k = 4.0 * f64::ln(3.0);
     println!(
-        "Found k: {k} in {} seconds",
+        "Found k: {k} in {:.1} seconds",
         k_start_time.elapsed().as_secs_f64()
     );
 
     let tune_start_time = Instant::now();
-    tune(
-        &data_set,
-        k,
-        &middle_game_piece_square_tables,
-        &end_game_piece_square_tables,
-        &phases,
-    );
+    tune(&data_set, k, initial_parameters, initial_phase_weights);
     println!(
-        "Tuned in {} seconds",
+        "Tuned in {:.1} seconds",
         tune_start_time.elapsed().as_secs_f64()
     );
 }
