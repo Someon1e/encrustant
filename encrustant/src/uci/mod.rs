@@ -104,6 +104,9 @@ struct TunableRange {
     pub aspiration_window_count: RangeInclusive<u32>,
 
     pub pawn_correction_history_grain: RangeInclusive<i16>,
+    pub pawn_correction_history_weight: RangeInclusive<i32>,
+
+    pub minor_piece_correction_history_weight: RangeInclusive<i32>,
 
     pub quiet_history_multiplier_bonus: RangeInclusive<i32>,
     pub quiet_history_subtraction_bonus: RangeInclusive<i32>,
@@ -131,8 +134,14 @@ const TUNABLE_RANGES: TunableRange = TunableRange {
     aspiration_window_start: 10..=60,
     aspiration_window_growth: 20..=90,
     aspiration_window_count: 2..=8,
+
     improving_static_null_margin: 25..=90,
+
     pawn_correction_history_grain: 130..=400,
+    pawn_correction_history_weight: 700..=1500,
+
+    minor_piece_correction_history_weight: 700..=1500,
+
     quiet_history_multiplier_bonus: 100..=500,
     quiet_history_subtraction_bonus: 70..=300,
     quiet_history_multiplier_malus: 100..=500,
@@ -233,6 +242,8 @@ option name Threads type spin default 1 min 1 max 1"
                 aspiration_window_growth,
                 improving_static_null_margin,
                 pawn_correction_history_grain,
+                pawn_correction_history_weight,
+                minor_piece_correction_history_weight,
                 quiet_history_multiplier_bonus,
                 quiet_history_subtraction_bonus,
                 quiet_history_multiplier_malus,
