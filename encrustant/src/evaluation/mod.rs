@@ -45,16 +45,13 @@ impl Eval {
     /// Get the middlegame and endgame value of a piece on a square
     #[must_use]
     pub const fn get_piece_value(
-        middle_game_piece_square_tables: &PieceSquareTable,
-        end_game_piece_square_tables: &PieceSquareTable,
+        piece_square_tables: &PieceSquareTable,
         piece_index: usize,
         square_index: usize,
     ) -> (i16, i16) {
-        let middle_game_piece_score =
-            middle_game_piece_square_tables[piece_index * 64 + square_index];
-        let end_game_piece_score = end_game_piece_square_tables[piece_index * 64 + square_index];
+        let piece_score = piece_square_tables[piece_index * 64 + square_index];
 
-        (middle_game_piece_score, end_game_piece_score)
+        (piece_score.0, piece_score.1)
     }
 
     /// Uses the phase to interpolate between middlegame and endgame score
@@ -72,8 +69,7 @@ impl Eval {
 
     #[must_use]
     pub fn raw_evaluate_with_parameters(
-        middle_game_piece_square_tables: &PieceSquareTable,
-        end_game_piece_square_tables: &PieceSquareTable,
+        piece_square_tables: &PieceSquareTable,
         board: &Board,
     ) -> (EvalNumber, EvalNumber) {
         let mut total_middle_game_score = 0;
@@ -83,8 +79,7 @@ impl Eval {
             let mut bit_board = *board.get_bit_board(piece);
             consume_bit_board!(bit_board, square {
                 let (middle_game_value, end_game_value) = Self::get_piece_value(
-                    middle_game_piece_square_tables,
-                    end_game_piece_square_tables,
+                    piece_square_tables,
                     piece as usize,
                     square.flip().usize(),
                 );
@@ -98,8 +93,7 @@ impl Eval {
             let mut bit_board = *board.get_bit_board(piece);
             consume_bit_board!(bit_board, square {
                 let (middle_game_value, end_game_value) = Self::get_piece_value(
-                    middle_game_piece_square_tables,
-                    end_game_piece_square_tables,
+                    piece_square_tables,
                     piece as usize - 6,
                     square.usize(),
                 );
@@ -115,8 +109,7 @@ impl Eval {
     /// Returns an estimated score of the position for the side playing, using the provided evaluation parameters.
     #[must_use]
     pub fn evaluate_with_parameters(
-        middle_game_piece_square_tables: &PieceSquareTable,
-        end_game_piece_square_tables: &PieceSquareTable,
+        piece_square_tables: &PieceSquareTable,
         phases: &[EvalNumber; 5],
         board: &Board,
     ) -> EvalNumber {
@@ -129,11 +122,8 @@ impl Eval {
             + phases[4] * 2
         };
 
-        let (total_middle_game_score, total_end_game_score) = Self::raw_evaluate_with_parameters(
-            middle_game_piece_square_tables,
-            end_game_piece_square_tables,
-            board,
-        );
+        let (total_middle_game_score, total_end_game_score) =
+            Self::raw_evaluate_with_parameters(piece_square_tables, board);
         let phase = Self::get_phase(board, phases);
         Self::calculate_score(
             phase,
@@ -147,20 +137,15 @@ impl Eval {
     #[must_use]
     pub fn evaluate(board: &Board) -> EvalNumber {
         Self::evaluate_with_parameters(
-            &eval_data::MIDDLE_GAME_PIECE_SQUARE_TABLES,
-            &eval_data::END_GAME_PIECE_SQUARE_TABLES,
-            &eval_data::PHASES,
+            &eval_data::PIECE_SQUARE_TABLE,
+            &eval_data::PHASE_WEIGHTS,
             board,
         )
     }
 
     #[must_use]
     pub fn raw_evaluate(board: &Board) -> (EvalNumber, EvalNumber) {
-        Self::raw_evaluate_with_parameters(
-            &eval_data::MIDDLE_GAME_PIECE_SQUARE_TABLES,
-            &eval_data::END_GAME_PIECE_SQUARE_TABLES,
-            board,
-        )
+        Self::raw_evaluate_with_parameters(&eval_data::PIECE_SQUARE_TABLE, board)
     }
 }
 

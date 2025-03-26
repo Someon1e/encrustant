@@ -344,8 +344,7 @@ impl Search {
         };
         let actual_square = if is_white { square.flip() } else { square };
         let (middle_game_value, end_game_value) = Eval::get_piece_value(
-            &eval_data::MIDDLE_GAME_PIECE_SQUARE_TABLES,
-            &eval_data::END_GAME_PIECE_SQUARE_TABLES,
+            &eval_data::PIECE_SQUARE_TABLE,
             piece_index,
             actual_square.usize(),
         );
@@ -380,8 +379,7 @@ impl Search {
         };
         let actual_square = if is_white { square.flip() } else { square };
         let (middle_game_value, end_game_value) = Eval::get_piece_value(
-            &eval_data::MIDDLE_GAME_PIECE_SQUARE_TABLES,
-            &eval_data::END_GAME_PIECE_SQUARE_TABLES,
+            &eval_data::PIECE_SQUARE_TABLE,
             piece_index,
             actual_square.usize(),
         );
@@ -415,7 +413,7 @@ impl Search {
 
     #[must_use]
     pub fn static_evaluate(&self) -> EvalNumber {
-        let phases = eval_data::PHASES;
+        let phases = eval_data::PHASE_WEIGHTS;
         #[rustfmt::skip]
         let total_phase = {
             phases[0] * 16
