@@ -76,10 +76,10 @@ pub(crate) const DEFAULT_TUNABLES: Tunable = Tunable {
     improving_static_null_margin: 41,
 
     pawn_correction_history_grain: 244,
-    pawn_correction_history_weight: 1024,
+    pawn_correction_history_weight: 1200,
 
     minor_piece_correction_history_grain: 256,
-    minor_piece_correction_history_weight: 1200,
+    minor_piece_correction_history_weight: 900,
 
     quiet_history_multiplier_bonus: 297,
     quiet_history_subtraction_bonus: 149,
