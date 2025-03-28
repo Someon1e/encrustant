@@ -888,6 +888,9 @@ impl Search {
                     let mut r = param!(self).lmr_base;
                     r += u32::from(ply_remaining) * param!(self).lmr_ply_multiplier;
                     r += (index as u32) * param!(self).lmr_index_multiplier;
+                    if is_not_pv_node {
+                        r += param!(self).lmr_non_pv_reduction;
+                    }
                     (r / 1024) as u8
                 };
                 score = -self.negamax(

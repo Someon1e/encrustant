@@ -16,6 +16,7 @@ pub struct Tunable {
     pub lmr_base: u32,
     pub lmr_ply_multiplier: u32,
     pub lmr_index_multiplier: u32,
+    pub lmr_non_pv_reduction: u32,
 
     pub lmp_base: u32,
 
@@ -61,13 +62,12 @@ pub(crate) const DEFAULT_TUNABLES: Tunable = Tunable {
     futility_margin: 116,
     static_null_margin: 58,
 
-    lmr_base: 2048,
-
+    lmr_min_depth: 3,
+    lmr_min_index: 6,
+    lmr_base: 1548,
     lmr_ply_multiplier: 130,
     lmr_index_multiplier: 100,
-
-    lmr_min_index: 6,
-    lmr_min_depth: 3,
+    lmr_non_pv_reduction: 500,
 
     aspiration_window_start: 12,
     aspiration_window_growth: 40,
