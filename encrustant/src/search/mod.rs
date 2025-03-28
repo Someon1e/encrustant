@@ -1243,15 +1243,19 @@ impl Search {
         minor_piece_index: u64,
     ) -> EvalNumber {
         let pawn_correction = self.pawn_correction_history[usize::from(self.board.white_to_move)]
-            [pawn_index as usize];
-        evaluation += i32::from(pawn_correction / param!(self).pawn_correction_history_grain);
+            [pawn_index as usize]
+            / param!(self).pawn_correction_history_grain;
 
         let minor_piece_correction = self.minor_piece_correction_history
-            [usize::from(self.board.white_to_move)][minor_piece_index as usize];
-        evaluation +=
-            i32::from(minor_piece_correction / param!(self).minor_piece_correction_history_grain);
+            [usize::from(self.board.white_to_move)][minor_piece_index as usize]
+            / param!(self).minor_piece_correction_history_grain;
 
-        evaluation
+        let correction = ((i32::from(pawn_correction)
+            * param!(self).pawn_correction_history_weight)
+            + (i32::from(minor_piece_correction)
+                * param!(self).minor_piece_correction_history_weight))
+            / 1024;
+        evaluation + correction
     }
 
     fn update_correction_history<const CORRECTION_HISTORY_LENGTH: usize>(
