@@ -5,7 +5,7 @@ use std::sync::{
 
 use crate::{evaluation::eval_data::EvalNumber, timer::Time};
 
-use super::{IMMEDIATE_CHECKMATE_SCORE, Ply, Search};
+use super::{IMMEDIATE_CHECKMATE_SCORE, Ply, Search, search_params::Tunable};
 
 #[cfg(target_arch = "wasm32")]
 type Bool = bool;
@@ -221,6 +221,7 @@ impl<'a> TimeManager<'a> {
         node_count: u64,
         best_score: EvalNumber,
         best_move_stability: Ply,
+        parameters: Tunable,
     ) -> bool {
         if self.is_stopped() {
             return true;
@@ -245,9 +246,18 @@ impl<'a> TimeManager<'a> {
         }
 
         if let Some(real_time) = &self.real_time {
-            const BEST_MOVE_STABILITY_MULTIPLIERS: [u64; 8] = [150, 130, 120, 110, 100, 95, 90, 85];
-            let multiplier = BEST_MOVE_STABILITY_MULTIPLIERS
-                [best_move_stability.min(BEST_MOVE_STABILITY_MULTIPLIERS.len() as u8 - 1) as usize];
+            let best_move_stability_multipliers: [u64; 8] = [
+                parameters.best_move_stability_multiplier_0,
+                parameters.best_move_stability_multiplier_1,
+                parameters.best_move_stability_multiplier_2,
+                parameters.best_move_stability_multiplier_3,
+                parameters.best_move_stability_multiplier_4,
+                parameters.best_move_stability_multiplier_5,
+                parameters.best_move_stability_multiplier_6,
+                parameters.best_move_stability_multiplier_7,
+            ];
+            let multiplier = best_move_stability_multipliers
+                [best_move_stability.min(best_move_stability_multipliers.len() as u8 - 1) as usize];
             let adjusted_time = (real_time.soft_time_limit * multiplier) / 100;
             return real_time.timer.milliseconds() > adjusted_time.min(real_time.hard_time_limit);
         }

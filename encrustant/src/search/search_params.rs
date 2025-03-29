@@ -44,6 +44,18 @@ pub struct Tunable {
     pub capture_history_subtraction_bonus: i32,
     pub capture_history_multiplier_malus: i32,
     pub capture_history_subtraction_malus: i32,
+
+    pub best_move_stability_multiplier_0: u64,
+    pub best_move_stability_multiplier_1: u64,
+    pub best_move_stability_multiplier_2: u64,
+    pub best_move_stability_multiplier_3: u64,
+    pub best_move_stability_multiplier_4: u64,
+    pub best_move_stability_multiplier_5: u64,
+    pub best_move_stability_multiplier_6: u64,
+    pub best_move_stability_multiplier_7: u64,
+
+    pub hard_time_divisor: u64,
+    pub soft_time_divisor: u64,
 }
 
 pub(crate) const DEFAULT_TUNABLES: Tunable = Tunable {
@@ -91,4 +103,16 @@ pub(crate) const DEFAULT_TUNABLES: Tunable = Tunable {
     capture_history_subtraction_bonus: 150,
     capture_history_multiplier_malus: 290,
     capture_history_subtraction_malus: 140,
+
+    best_move_stability_multiplier_0: 150,
+    best_move_stability_multiplier_1: 130,
+    best_move_stability_multiplier_2: 120,
+    best_move_stability_multiplier_3: 110,
+    best_move_stability_multiplier_4: 100,
+    best_move_stability_multiplier_5: 95,
+    best_move_stability_multiplier_6: 90,
+    best_move_stability_multiplier_7: 85,
+
+    hard_time_divisor: 6,
+    soft_time_divisor: 24,
 };
