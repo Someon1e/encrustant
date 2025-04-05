@@ -10,34 +10,41 @@
 - Pondering
 
 ### Search
-- SPSA-tuned search parameters
-- Fail-soft alpha-beta pruning
 - Iterative deepening
 - Principal variation search
-- Aspiration windows
+- Fail-soft alpha-beta pruning
 - Quiescence search
 - Transposition table
+- Aspiration windows
+- SPSA-tuned search parameters
 - Check extensions
 - `improving` heuristic
 
 ### Search pruning and reductions
 - Late move reduction
 - Late move pruning
-- Futility pruning
-- Static null move pruning (also known as reverse futility pruning)
 - Null move heuristic
+- Static null move pruning (also known as reverse futility pruning)
+- Futility pruning
 - Internal iterative reduction
 
 ### Evaluation
-- Tuned piece-square-table-only evaluation
+- Piece-square-table-only evaluation tuned on the lichess-big3-resolved dataset
 - Pawn correction history
+- Minor piece correction history
 
 ### Search move ordering
-- Butterfly history heuristic
+- Butterfly history
+- Capture history
 - Killer move heuristic
 - MVV-LVA
 
+### Time management
+- Best move stability
+
 ## TODO:
+- Checkmate distance pruning
+- Continuation history
 - Static exchange evaluation
 - Tablebases
 - Opening book
