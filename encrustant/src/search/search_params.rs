@@ -59,7 +59,6 @@ pub struct Tunable {
 }
 
 pub(crate) const DEFAULT_TUNABLES: Tunable = Tunable {
-    iir_min_depth: 5,
     iir_depth_reduction: 1,
 
     static_null_min_depth: 7,
@@ -68,51 +67,41 @@ pub(crate) const DEFAULT_TUNABLES: Tunable = Tunable {
 
     nmp_min_depth: 2,
     nmp_base_reduction: 3,
-    nmp_ply_divisor: 4,
 
-    futility_margin: 116,
-    static_null_margin: 58,
-
-    lmr_base: 2048,
-
-    lmr_ply_multiplier: 130,
-    lmr_index_multiplier: 100,
-
+    history_decay: 9,
+    iir_min_depth: 5,
+    futility_margin: 115,
+    static_null_margin: 56,
     lmr_min_index: 6,
     lmr_min_depth: 3,
-
+    lmr_base: 1909,
+    lmr_ply_multiplier: 135,
+    lmr_index_multiplier: 94,
+    nmp_ply_divisor: 4,
     aspiration_window_start: 12,
-    aspiration_window_growth: 40,
-    aspiration_window_count: 4,
-
-    improving_static_null_margin: 41,
-
-    pawn_correction_history_grain: 244,
-    pawn_correction_history_weight: 1024,
-
+    aspiration_window_growth: 41,
+    aspiration_window_count: 5,
+    improving_static_null_margin: 39,
+    pawn_correction_history_grain: 248,
+    pawn_correction_history_weight: 1129,
     minor_piece_correction_history_grain: 256,
-    minor_piece_correction_history_weight: 1024,
-
-    quiet_history_multiplier_bonus: 297,
-    quiet_history_subtraction_bonus: 149,
-    quiet_history_multiplier_malus: 279,
-    quiet_history_subtraction_malus: 136,
-    history_decay: 9,
-
-    capture_history_multiplier_bonus: 300,
-    capture_history_subtraction_bonus: 150,
-    capture_history_multiplier_malus: 290,
-    capture_history_subtraction_malus: 140,
-
-    best_move_stability_multiplier_0: 150,
-    best_move_stability_multiplier_1: 130,
-    best_move_stability_multiplier_2: 120,
-    best_move_stability_multiplier_3: 110,
-    best_move_stability_multiplier_4: 100,
-    best_move_stability_multiplier_5: 95,
-    best_move_stability_multiplier_6: 90,
-    best_move_stability_multiplier_7: 85,
-
+    minor_piece_correction_history_weight: 1093,
+    quiet_history_multiplier_bonus: 294,
+    quiet_history_subtraction_bonus: 151,
+    quiet_history_multiplier_malus: 271,
+    quiet_history_subtraction_malus: 129,
+    capture_history_multiplier_bonus: 288,
+    capture_history_subtraction_bonus: 144,
+    capture_history_multiplier_malus: 291,
+    capture_history_subtraction_malus: 139,
+    best_move_stability_multiplier_0: 161,
+    best_move_stability_multiplier_1: 133,
+    best_move_stability_multiplier_2: 126,
+    best_move_stability_multiplier_3: 103,
+    best_move_stability_multiplier_4: 104,
+    best_move_stability_multiplier_5: 105,
+    best_move_stability_multiplier_6: 93,
+    best_move_stability_multiplier_7: 71,
     hard_time_divisor: 6,
     soft_time_divisor: 24,
 };
