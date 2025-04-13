@@ -1212,7 +1212,12 @@ impl Search {
                 break;
             }
 
-            if time_manager.soft_stop(self.node_count, best_score, best_move_stability) {
+            if time_manager.soft_stop(
+                self.node_count,
+                best_score,
+                best_move_stability,
+                param!(self),
+            ) {
                 // It would probably be a waste of time to start another iteration
                 break;
             }
@@ -1228,10 +1233,12 @@ impl Search {
     }
 
     #[must_use]
-    pub fn calculate_time(clock_time: u64, increment: u64) -> (u64, u64) {
+    pub fn calculate_time(&self, clock_time: u64, increment: u64) -> (u64, u64) {
         let max_time = clock_time / 2;
-        let hard_time_limit = (clock_time / 6 + increment * 2).min(max_time);
-        let soft_time_limit = (clock_time / 24 + increment / 2).min(hard_time_limit);
+        let hard_time_limit =
+            (clock_time / param!(self).hard_time_divisor + increment * 2).min(max_time);
+        let soft_time_limit =
+            (clock_time / param!(self).soft_time_divisor + increment / 2).min(hard_time_limit);
         (hard_time_limit, soft_time_limit)
     }
 

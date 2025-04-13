@@ -102,7 +102,7 @@ fn search(
             .map_or_else(|| 0, core::num::NonZero::get);
 
             let (mut hard_time_limit, mut soft_time_limit) =
-                Search::calculate_time(clock_time, increment);
+                search.calculate_time(clock_time, increment);
             if let Some(fixed_time) = search_time.fixed_time() {
                 hard_time_limit = clock_time.min(fixed_time);
                 soft_time_limit = soft_time_limit.min(hard_time_limit);
