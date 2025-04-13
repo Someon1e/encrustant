@@ -1107,7 +1107,11 @@ impl Search {
             ply_remaining,
             node_type,
             value: best_score,
-            transposition_move: best_move,
+            transposition_move: if best_move.is_none() {
+                hash_move
+            } else {
+                best_move
+            },
         });
 
         best_score
