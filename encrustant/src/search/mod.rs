@@ -1102,12 +1102,22 @@ impl Search {
         }
 
         // Save to transposition table
+        let zobrist_key_32 = zobrist_key.lower_u32();
         self.transposition_table[zobrist_index] = Some(NodeValue {
-            zobrist_key_32: zobrist_key.lower_u32(),
+            zobrist_key_32,
             ply_remaining,
             node_type,
             value: best_score,
-            transposition_move: best_move,
+            transposition_move: if best_move.is_none() {
+                match self.transposition_table[zobrist_index] {
+                    Some(entry) if entry.zobrist_key_32 == zobrist_key_32 => {
+                        entry.transposition_move
+                    }
+                    _ => EncodedMove::NONE,
+                }
+            } else {
+                best_move
+            },
         });
 
         best_score
