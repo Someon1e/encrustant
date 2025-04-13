@@ -934,10 +934,10 @@ impl Search {
 
             if score > best_score {
                 best_score = score;
-                best_move = encoded_move_data;
 
                 if score > alpha {
                     alpha = score;
+                    best_move = encoded_move_data;
 
                     self.pv.update_move(ply_from_root, encoded_move_data);
 
@@ -1107,7 +1107,11 @@ impl Search {
             ply_remaining,
             node_type,
             value: best_score,
-            transposition_move: best_move,
+            transposition_move: if best_move.is_none() {
+                hash_move
+            } else {
+                best_move
+            },
         });
 
         best_score
