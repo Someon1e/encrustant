@@ -82,6 +82,7 @@ pub struct DepthSearchInfo {
 const PAWN_CORRECTION_HISTORY_LENGTH: usize = 8192;
 const MINOR_PIECE_CORRECTION_HISTORY_LENGTH: usize = 8192;
 
+/// Information used in search about the position.
 #[derive(Clone, Copy, Debug)]
 pub struct SearchState {
     total_middle_game_score: EvalNumber,
@@ -90,10 +91,11 @@ pub struct SearchState {
     /// Position zobrist key.
     pub position_zobrist_key: Zobrist,
 
-    // Pawn zobrist key.
+    /// Pawn zobrist key.
     pub pawn_zobrist_key: Zobrist,
 }
 
+/// A combination of `GameState` and `SearchState`.
 pub struct ExtendedState {
     game_state: GameState,
     search_state: SearchState,

@@ -29,6 +29,9 @@ pub struct SpinU16 {
     default: u16,
 }
 impl SpinU16 {
+    /// # Panics
+    ///
+    /// Will panic if the default value is not contained with the range.
     #[must_use]
     pub fn new(range: Range<u16>, default: u16) -> Self {
         assert!(range.contains(&default));

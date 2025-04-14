@@ -65,6 +65,7 @@ impl Zobrist {
         ((self.0 as u128 * size as u128) >> 64) as u64
     }
 
+    /// Performs the `%` operation.
     #[must_use]
     pub const fn modulo(&self, size: u64) -> u64 {
         self.0 % size
