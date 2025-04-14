@@ -181,10 +181,14 @@ impl Board {
             None
         } else {
             let en_passant_square = Square::from_notation(en_passant);
-            if en_passant_square.is_err() {
+            if let Ok(en_passant_square) = en_passant_square {
+                if en_passant_square.rank() != if white_to_move { 5 } else { 2 } {
+                    return Err(FenParseErr::InvalidEnPassant);
+                }
+                Some(en_passant_square)
+            } else {
                 return Err(FenParseErr::InvalidEnPassant);
             }
-            Some(en_passant_square.unwrap())
         };
         let half_move_clock = {
             let component = components.next();
@@ -294,6 +298,14 @@ impl Board {
             occupied_squares,
         ) {
             return Err(FenParseErr::EnemyInCheck);
+        }
+
+        if let Some(en_passant_square) = en_passant_square {
+            let en_passant_pawn_position =
+                en_passant_square.down(if board.white_to_move { 1 } else { -1 });
+            if !enemy_pawns.get(&en_passant_pawn_position) {
+                return Err(FenParseErr::InvalidEnPassant);
+            }
         }
 
         Ok(board)
