@@ -50,7 +50,7 @@ impl MoveOrderer {
         let moving_to = move_data.to;
 
         match move_data.flag {
-            Flag::EnPassant | Flag::Castle => {
+            Flag::EnPassant | Flag::Castle | Flag::PawnTwoUp => {
                 return MoveGuessNum::from(
                     search.quiet_history[usize::from(search.board.white_to_move)]
                         [moving_from.usize() + moving_to.usize() * 64],
@@ -62,7 +62,7 @@ impl MoveOrderer {
             Flag::RookPromotion => return ROOK_PROMOTION_BONUS,
             Flag::QueenPromotion => return QUEEN_PROMOTION_BONUS,
 
-            Flag::PawnTwoUp | Flag::None => {}
+            Flag::None => {}
         }
 
         let mut score = 0;
