@@ -12,7 +12,6 @@ pub mod transposition;
 pub mod zobrist;
 
 use pv::Pv;
-use search_params::{DEFAULT_TUNABLES, Tunable};
 use time_manager::TimeManager;
 use zobrist::Zobrist;
 
@@ -54,7 +53,7 @@ const USE_FUTILITY_PRUNING: bool = true;
 #[cfg(not(feature = "spsa"))]
 macro_rules! param {
     ($self:expr) => {
-        DEFAULT_TUNABLES
+        crate::search::search_params::DEFAULT_TUNABLES
     };
 }
 #[cfg(feature = "spsa")]
@@ -126,7 +125,7 @@ pub struct Search {
     node_count: u64,
 
     #[cfg(feature = "spsa")]
-    tunable: Tunable,
+    tunable: crate::search::search_params::Tunable,
 }
 
 impl Search {
@@ -135,7 +134,7 @@ impl Search {
     pub fn new(
         board: Board,
         transposition_capacity: usize,
-        #[cfg(feature = "spsa")] tunable: Tunable,
+        #[cfg(feature = "spsa")] tunable: crate::search::search_params::Tunable,
     ) -> Self {
         let (total_middle_game_score, total_end_game_score) = Eval::raw_evaluate(&board);
         let position_zobrist_key = Zobrist::compute(&board);
@@ -1097,7 +1096,7 @@ impl Search {
                     minor_piece_index,
                     error,
                     param!(self).minor_piece_correction_history_grain,
-                )
+                );
             }
         }
 
@@ -1144,7 +1143,7 @@ impl Search {
                     // -EvalNumber::MAX = -2147483647
                     // EvalNumber::MIN = -2147483648
 
-                    beta = ((i64::from(alpha) + i64::from(beta)) / 2) as i32;
+                    beta = i64::midpoint(i64::from(alpha), i64::from(beta)) as i32;
                 } else if best_score >= beta {
                     beta = beta.saturating_add(param!(self).aspiration_window_growth);
                 } else {
@@ -1249,7 +1248,7 @@ impl Search {
     #[must_use]
     fn get_correction(
         &self,
-        mut evaluation: EvalNumber,
+        evaluation: EvalNumber,
         pawn_index: u64,
         minor_piece_index: u64,
     ) -> EvalNumber {
@@ -1306,7 +1305,7 @@ mod tests {
     use crate::{
         board::Board,
         evaluation::{Eval, eval_data::EvalNumber},
-        search::{Search, search_params::DEFAULT_TUNABLES, transposition::megabytes_to_capacity},
+        search::{Search, transposition::megabytes_to_capacity},
     };
 
     #[test]
@@ -1322,7 +1321,7 @@ mod tests {
                 board,
                 megabytes_to_capacity(8),
                 #[cfg(feature = "spsa")]
-                DEFAULT_TUNABLES,
+                crate::search::search_params::DEFAULT_TUNABLES,
             )
             .quiescence_search(-EvalNumber::MAX, EvalNumber::MAX),
             Eval::evaluate(&quiet)

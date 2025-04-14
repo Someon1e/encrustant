@@ -9,7 +9,7 @@ use super::{
     slider_lookup::{get_rook_moves, relevant_rook_blockers},
 };
 
-pub(crate) struct PawnAttacks {
+pub struct PawnAttacks {
     pub white_pawn_attacks_at_square: [BitBoard; 64],
     pub black_pawn_attacks_at_square: [BitBoard; 64],
 }

@@ -7,7 +7,6 @@ use crate::board::square::Square;
 use crate::move_generator::move_data::Flag;
 use crate::search::encoded_move::EncodedMove;
 use crate::search::pv::Pv;
-use crate::search::search_params::Tunable;
 use crate::search::time_manager::{NodeLimit, RealTime, TimeManager};
 use crate::search::{DepthSearchInfo, IMMEDIATE_CHECKMATE_SCORE, Ply, Search};
 use crate::timer::Time;
@@ -31,7 +30,7 @@ fn output_search(out: fn(&str), info: &DepthSearchInfo, time: u64) {
     let evaluation_info = if Search::score_is_checkmate(evaluation) {
         format!(
             "score mate {}",
-            (((IMMEDIATE_CHECKMATE_SCORE - evaluation.abs() as i32) + 1) / 2) * evaluation.signum()
+            (((IMMEDIATE_CHECKMATE_SCORE - evaluation.abs()) + 1) / 2) * evaluation.signum()
         )
     } else {
         format!("score cp {evaluation}")
@@ -44,7 +43,7 @@ fn output_search(out: fn(&str), info: &DepthSearchInfo, time: u64) {
     let nodes_per_second = if time == 0 {
         69420
     } else {
-        (u64::from(nodes) * 1000) / time
+        (nodes * 1000) / time
     };
 
     out(&format!(
@@ -62,7 +61,7 @@ fn search(
     stopped: Bool,
     ponder_info: PonderInfo,
     mated_in: Option<Ply>,
-    #[cfg(feature = "spsa")] tunables: Tunable,
+    #[cfg(feature = "spsa")] tunables: crate::search::search_params::Tunable,
 ) {
     let search_start = Time::now();
 
@@ -112,19 +111,17 @@ fn search(
                 hard_time_limit,
                 soft_time_limit,
             ))
-        } else if let Some(fixed_time) = search_time.fixed_time() {
-            Some(RealTime::new(&search_start, fixed_time, fixed_time))
         } else {
-            None
+            search_time
+                .fixed_time()
+                .map(|fixed_time| RealTime::new(&search_start, fixed_time, fixed_time))
         }
     };
     let time_manager = TimeManager::new(
         search_time.depth(),
-        if let Some(nodes) = search_time.nodes() {
-            Some(NodeLimit::new(nodes, nodes))
-        } else {
-            None
-        },
+        search_time
+            .nodes()
+            .map(|nodes| NodeLimit::new(nodes, nodes)),
         real_time,
         stopped,
         ponder_info.is_pondering,
@@ -182,7 +179,7 @@ mod search_controller {
     use crate::board::Board;
     use crate::board::square::Square;
     use crate::move_generator::move_data::Flag;
-    use crate::search::search_params::Tunable;
+
     use crate::search::{Ply, Search};
     use crate::uci::go_params::SearchTime;
     use crate::uci::{Bool, PonderInfo};
@@ -197,7 +194,7 @@ mod search_controller {
             ponder_info: PonderInfo,
             mated_in: Option<Ply>,
             #[cfg(feature = "spsa")]
-            tunables: Tunable,
+            tunables: crate::search::search_params::Tunable,
         },
         SetTranspositionCapacity(usize),
         ClearCacheForNewGame,
@@ -262,7 +259,7 @@ mod search_controller {
             search_time: SearchTime,
             ponder_info: PonderInfo,
             mated_in: Option<Ply>,
-            #[cfg(feature = "spsa")] tunables: Tunable,
+            #[cfg(feature = "spsa")] tunables: crate::search::search_params::Tunable,
         ) {
             self.0
                 .send(SearchCommand::Search {
@@ -300,8 +297,8 @@ mod search_controller {
     use crate::board::square::Square;
     use crate::move_generator::move_data::Flag;
     use crate::search::{Ply, Search};
+    use crate::uci::PonderInfo;
     use crate::uci::go_params::SearchTime;
-    use crate::uci::{PonderInfo, Tunable};
 
     use super::{Bool, search};
 
@@ -328,7 +325,7 @@ mod search_controller {
             search_time: SearchTime,
             ponder_info: PonderInfo,
             mated_in: Option<Ply>,
-            #[cfg(feature = "spsa")] tunables: Tunable,
+            #[cfg(feature = "spsa")] tunables: crate::search::search_params::Tunable,
         ) {
             search(
                 self.out,

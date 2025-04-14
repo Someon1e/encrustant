@@ -82,15 +82,13 @@ impl Board {
                 if file > 8 {
                     return Err(FenParseErr::InvalidDigit);
                 }
-            } else {
-                if let Some(piece) = Piece::from_fen_char(&character) {
-                    let square = &Square::from_coords(rank, file);
-                    bit_boards[piece as usize].set(square);
+            } else if let Some(piece) = Piece::from_fen_char(&character) {
+                let square = &Square::from_coords(rank, file);
+                bit_boards[piece as usize].set(square);
 
-                    file += 1;
-                } else {
-                    return Err(FenParseErr::InvalidPiece);
-                }
+                file += 1;
+            } else {
+                return Err(FenParseErr::InvalidPiece);
             }
 
             if file == 8 {

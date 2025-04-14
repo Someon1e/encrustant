@@ -603,7 +603,7 @@ fn bench() {
 
         let result = search.iterative_deepening(&time_manager, &mut |_| {});
         out(&format!("{position} {depth} {}", search.node_count()));
-        total_nodes += u64::from(search.node_count());
+        total_nodes += search.node_count();
     }
     out(&format!(
         "{total_nodes} nodes {nodes_per_second} nps",
@@ -619,7 +619,7 @@ fn process_input(input: &str) -> bool {
         "go" => {
             let mut parameters = GoParameters::empty();
             parameters.parse(&mut args);
-            uci_processor.borrow_mut().go(parameters)
+            uci_processor.borrow_mut().go(parameters);
         }
         "position" => uci_processor.borrow_mut().position(&mut args),
         "ucinewgame" => uci_processor.borrow_mut().ucinewgame(),

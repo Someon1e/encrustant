@@ -28,7 +28,7 @@ pub struct NodeLimit {
     hard_limit: u64,
 }
 impl NodeLimit {
-    pub const fn new(hard_limit: u64, soft_limit: u64) -> Self {
+    #[must_use] pub const fn new(hard_limit: u64, soft_limit: u64) -> Self {
         assert!(hard_limit >= soft_limit);
         Self {
             soft_limit,
@@ -43,7 +43,7 @@ pub struct RealTime<'a> {
     soft_time_limit: u64,
 }
 impl<'a> RealTime<'a> {
-    pub fn new(timer: &'a Time, hard_time_limit: u64, soft_time_limit: u64) -> Self {
+    #[must_use] pub fn new(timer: &'a Time, hard_time_limit: u64, soft_time_limit: u64) -> Self {
         assert!(hard_time_limit >= soft_time_limit);
         Self {
             timer,
@@ -55,7 +55,7 @@ impl<'a> RealTime<'a> {
 
 impl<'a> TimeManager<'a> {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         depth_limit: Option<Ply>,
         node_limit: Option<NodeLimit>,
         real_time: Option<RealTime<'a>>,
@@ -76,7 +76,7 @@ impl<'a> TimeManager<'a> {
     }
 
     #[must_use]
-    pub fn time_limited(
+    pub const fn time_limited(
         stopped: Bool,
         pondering: Bool,
         mated_in: Option<Ply>,
@@ -163,7 +163,7 @@ impl<'a> TimeManager<'a> {
         {
             return true;
         }
-        return false;
+        false
     }
 
     #[must_use]
@@ -195,10 +195,10 @@ impl<'a> TimeManager<'a> {
             return true;
         }
 
-        return false;
+        false
     }
 
-    pub fn is_pondering(&self) -> bool {
+    #[must_use] pub fn is_pondering(&self) -> bool {
         #[cfg(target_arch = "wasm32")]
         return self.pondering;
 
@@ -207,7 +207,7 @@ impl<'a> TimeManager<'a> {
     }
 
     /// Returns the value of the `stopped` boolean.
-    pub fn is_stopped(&self) -> bool {
+    #[must_use] pub fn is_stopped(&self) -> bool {
         #[cfg(target_arch = "wasm32")]
         return self.stopped;
 
@@ -238,10 +238,8 @@ impl<'a> TimeManager<'a> {
         }
 
         if let Some(ply) = self.mated_in {
-            if Search::score_is_checkmate(best_score) {
-                if EvalNumber::from(ply) == IMMEDIATE_CHECKMATE_SCORE - best_score.abs() {
-                    return true;
-                }
+            if Search::score_is_checkmate(best_score) && EvalNumber::from(ply) == IMMEDIATE_CHECKMATE_SCORE - best_score.abs() {
+                return true;
             }
         }
 
@@ -262,6 +260,6 @@ impl<'a> TimeManager<'a> {
             return real_time.timer.milliseconds() > adjusted_time.min(real_time.hard_time_limit);
         }
 
-        return false;
+        false
     }
 }

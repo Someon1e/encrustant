@@ -23,7 +23,7 @@ mod tests {
     // Positions from
     // https://web.archive.org/web/20250414113109/https://raw.githubusercontent.com/AndyGrant/Ethereal/refs/heads/master/src/perft/standard.epd
     #[rustfmt::skip]
-    pub const TEST_FENS: [(u16, u64, &str); 759] = [
+    pub static TEST_FENS: [(u16, u64, &str); 759] = [
         (1, 20, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"),
         (2, 400, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"),
         (3, 8902, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"),

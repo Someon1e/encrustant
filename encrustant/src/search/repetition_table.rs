@@ -1,6 +1,6 @@
 use super::zobrist::Zobrist;
 
-pub(crate) struct RepetitionTable {
+pub struct RepetitionTable {
     positions: Vec<Zobrist>,
 }
 

@@ -254,7 +254,7 @@ mod tests {
         },
         search::{
             Search, encoded_move::EncodedMove, move_ordering::MoveOrderer,
-            search_params::DEFAULT_TUNABLES, transposition::megabytes_to_capacity,
+            transposition::megabytes_to_capacity,
         },
     };
 
@@ -268,7 +268,7 @@ mod tests {
                 board,
                 megabytes_to_capacity(8),
                 #[cfg(feature = "spsa")]
-                DEFAULT_TUNABLES,
+                crate::search::search_params::DEFAULT_TUNABLES,
             ),
             &move_generator,
             EncodedMove::NONE,
