@@ -37,7 +37,7 @@ thread_local! {
             out(output);
         },
 
-        SpinU16::new(8..2049, 32),
+        SpinU16::new(8..8193, 32),
     ));
 
     #[cfg(target_arch = "wasm32")]
