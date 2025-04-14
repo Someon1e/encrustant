@@ -46,8 +46,9 @@ fn output_search(out: fn(&str), info: &DepthSearchInfo, time: u64) {
         (nodes * 1000) / time
     };
 
+    let hash_full = info.hash_full;
     out(&format!(
-        "info depth {depth} seldepth {highest_depth} {evaluation_info} time {time} nodes {nodes} nps {nodes_per_second} pv{pv_string}"
+        "info depth {depth} seldepth {highest_depth} {evaluation_info} hashfull {hash_full} time {time} nodes {nodes} nps {nodes_per_second} pv{pv_string}"
     ));
 }
 
@@ -156,6 +157,7 @@ fn search(
             best: (&search.pv, evaluation),
             highest_depth: search.highest_depth,
             node_count: search.node_count(),
+            hash_full: search.hash_full(),
         },
         search_start.milliseconds(),
     );

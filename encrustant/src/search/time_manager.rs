@@ -28,7 +28,8 @@ pub struct NodeLimit {
     hard_limit: u64,
 }
 impl NodeLimit {
-    #[must_use] pub const fn new(hard_limit: u64, soft_limit: u64) -> Self {
+    #[must_use]
+    pub const fn new(hard_limit: u64, soft_limit: u64) -> Self {
         assert!(hard_limit >= soft_limit);
         Self {
             soft_limit,
@@ -43,7 +44,8 @@ pub struct RealTime<'a> {
     soft_time_limit: u64,
 }
 impl<'a> RealTime<'a> {
-    #[must_use] pub fn new(timer: &'a Time, hard_time_limit: u64, soft_time_limit: u64) -> Self {
+    #[must_use]
+    pub fn new(timer: &'a Time, hard_time_limit: u64, soft_time_limit: u64) -> Self {
         assert!(hard_time_limit >= soft_time_limit);
         Self {
             timer,
@@ -198,7 +200,8 @@ impl<'a> TimeManager<'a> {
         false
     }
 
-    #[must_use] pub fn is_pondering(&self) -> bool {
+    #[must_use]
+    pub fn is_pondering(&self) -> bool {
         #[cfg(target_arch = "wasm32")]
         return self.pondering;
 
@@ -207,7 +210,8 @@ impl<'a> TimeManager<'a> {
     }
 
     /// Returns the value of the `stopped` boolean.
-    #[must_use] pub fn is_stopped(&self) -> bool {
+    #[must_use]
+    pub fn is_stopped(&self) -> bool {
         #[cfg(target_arch = "wasm32")]
         return self.stopped;
 
@@ -238,7 +242,9 @@ impl<'a> TimeManager<'a> {
         }
 
         if let Some(ply) = self.mated_in {
-            if Search::score_is_checkmate(best_score) && EvalNumber::from(ply) == IMMEDIATE_CHECKMATE_SCORE - best_score.abs() {
+            if Search::score_is_checkmate(best_score)
+                && EvalNumber::from(ply) == IMMEDIATE_CHECKMATE_SCORE - best_score.abs()
+            {
                 return true;
             }
         }

@@ -77,6 +77,8 @@ pub struct DepthSearchInfo<'a> {
 
     /// How many times `make_move` was called in search
     pub node_count: u64,
+
+    pub hash_full: u16,
 }
 
 const PAWN_CORRECTION_HISTORY_LENGTH: usize = 8192;
@@ -1209,6 +1211,7 @@ impl Search {
                 best: (&self.pv, best_score),
                 highest_depth: self.highest_depth,
                 node_count: self.node_count,
+                hash_full: self.hash_full(),
             });
 
             if depth == Ply::MAX {
@@ -1299,6 +1302,19 @@ impl Search {
         );
 
         correction_history[usize::from(white_to_move)][index as usize] = entry as i16;
+    }
+
+    #[must_use]
+    pub fn hash_full(&self) -> u16 {
+        const SAMPLES: usize = 10000;
+
+        let mut count = 0;
+        for entry in self.transposition_table.iter().take(SAMPLES) {
+            if entry.is_some() {
+                count += 1;
+            }
+        }
+        (count * 1000 / SAMPLES as u32) as u16
     }
 }
 
