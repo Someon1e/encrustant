@@ -2,16 +2,17 @@
 #![warn(clippy::pedantic)]
 #![warn(clippy::nursery)]
 
+use std::io::{stdout, Write};
 use std::{
     env,
     io::stdin,
-    sync::{Arc, atomic::AtomicBool},
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use core::cell::RefCell;
 use encrustant::{
     board::Board,
-    search::{Search, time_manager::TimeManager, transposition::megabytes_to_capacity},
+    search::{time_manager::TimeManager, transposition::megabytes_to_capacity, Search},
     timer::Time,
     uci::{GoParameters, SpinU16, UCIProcessor},
 };
@@ -28,7 +29,10 @@ pub fn out(output: &str) {
     };
 
     #[cfg(not(target_arch = "wasm32"))]
-    println!("{output}");
+    {
+        println!("{output}");
+        stdout().flush().unwrap();
+    }
 }
 
 thread_local! {
