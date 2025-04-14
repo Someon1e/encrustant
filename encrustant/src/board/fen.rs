@@ -57,6 +57,9 @@ pub enum FenParseErr {
 
     /// Side to move is in triple check or more.
     TooManyChecks,
+
+    /// Enemy is in check.
+    EnemyInCheck,
 }
 
 impl Board {
@@ -226,10 +229,10 @@ impl Board {
             game_state,
         };
 
-        let king_square = if white_to_move {
-            white_king_square.unwrap()
+        let (friendly_king_square, enemy_king_square) = if white_to_move {
+            (white_king_square.unwrap(), black_king_square.unwrap())
         } else {
-            black_king_square.unwrap()
+            (black_king_square.unwrap(), white_king_square.unwrap())
         };
 
         let occupied_squares = bit_boards[0]
@@ -244,24 +247,32 @@ impl Board {
             | bit_boards[9]
             | bit_boards[10]
             | bit_boards[11];
-        let (enemy_pawns, enemy_knights, enemy_diagonal, enemy_orthogonal) = if white_to_move {
-            (
+
+        let (
+            (friendly_pawns, friendly_knights, friendly_diagonal, friendly_orthogonal),
+            (enemy_pawns, enemy_knights, enemy_diagonal, enemy_orthogonal),
+        ) = {
+            let black = (
                 bit_boards[Piece::BlackPawn as usize],
                 bit_boards[Piece::BlackKnight as usize],
                 bit_boards[Piece::BlackBishop as usize] | bit_boards[Piece::BlackQueen as usize],
                 bit_boards[Piece::BlackRook as usize] | bit_boards[Piece::BlackQueen as usize],
-            )
-        } else {
-            (
+            );
+            let white = (
                 bit_boards[Piece::WhitePawn as usize],
                 bit_boards[Piece::WhiteKnight as usize],
                 bit_boards[Piece::WhiteBishop as usize] | bit_boards[Piece::WhiteQueen as usize],
                 bit_boards[Piece::WhiteRook as usize] | bit_boards[Piece::WhiteQueen as usize],
-            )
+            );
+            if white_to_move {
+                (white, black)
+            } else {
+                (black, white)
+            }
         };
         if MoveGenerator::calculate_checkers(
             white_to_move,
-            king_square,
+            friendly_king_square,
             enemy_pawns,
             enemy_knights,
             enemy_diagonal,
@@ -272,6 +283,17 @@ impl Board {
             >= 3
         {
             return Err(FenParseErr::TooManyChecks);
+        }
+        if MoveGenerator::raw_calculate_is_in_check(
+            !white_to_move,
+            enemy_king_square,
+            friendly_pawns,
+            friendly_knights,
+            friendly_diagonal,
+            friendly_orthogonal,
+            occupied_squares,
+        ) {
+            return Err(FenParseErr::EnemyInCheck);
         }
 
         Ok(board)

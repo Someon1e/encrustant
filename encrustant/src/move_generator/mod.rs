@@ -533,6 +533,46 @@ impl MoveGenerator {
 
     /// Calculates whether the side to move is in check.
     #[must_use]
+    pub fn raw_calculate_is_in_check(
+        white_to_move: bool,
+        friendly_king_square: Square,
+        enemy_pawns: BitBoard,
+        enemy_knights: BitBoard,
+        enemy_diagonal: BitBoard,
+        enemy_orthogonal: BitBoard,
+        occupied_squares: BitBoard,
+    ) -> bool {
+        let pawn_check = pawn_move_generator::attack_bit_board(friendly_king_square, white_to_move);
+        let pawn_attacker = pawn_check & enemy_pawns;
+        if pawn_attacker.is_not_empty() {
+            return true;
+        }
+
+        let knight_check = Self::knight_attack_bit_board(friendly_king_square);
+        let knight_attacker = knight_check & enemy_knights;
+        if knight_attacker.is_not_empty() {
+            return true;
+        }
+
+        let diagonal_blockers = occupied_squares & relevant_bishop_blockers(friendly_king_square);
+        let diagonal_attacks = get_bishop_moves(friendly_king_square, diagonal_blockers);
+        let diagonal_attacker = diagonal_attacks & enemy_diagonal;
+        if diagonal_attacker.is_not_empty() {
+            return true;
+        }
+
+        let orthogonal_blockers = occupied_squares & relevant_rook_blockers(friendly_king_square);
+        let orthogonal_attacks = get_rook_moves(friendly_king_square, orthogonal_blockers);
+        let orthogonal_attacker = orthogonal_attacks & enemy_orthogonal;
+        if orthogonal_attacker.is_not_empty() {
+            return true;
+        }
+
+        false
+    }
+
+    /// Calculates whether the side to move is in check.
+    #[must_use]
     pub fn calculate_is_in_check(board: &Board) -> bool {
         let (friendly_pieces, enemy_pieces) = if board.white_to_move {
             (Piece::WHITE_PIECES, Piece::BLACK_PIECES)
@@ -541,21 +581,11 @@ impl MoveGenerator {
         };
 
         let friendly_king = *board.get_bit_board(friendly_pieces[5]);
-        let king_square = friendly_king.first_square();
+        let friendly_king_square = friendly_king.first_square();
 
-        let pawn_check = pawn_move_generator::attack_bit_board(king_square, board.white_to_move);
         let enemy_pawns = *board.get_bit_board(enemy_pieces[0]);
-        let pawn_attacker = pawn_check & enemy_pawns;
-        if pawn_attacker.is_not_empty() {
-            return true;
-        }
 
-        let knight_check = Self::knight_attack_bit_board(king_square);
         let enemy_knights = *board.get_bit_board(enemy_pieces[1]);
-        let knight_attacker = knight_check & enemy_knights;
-        if knight_attacker.is_not_empty() {
-            return true;
-        }
 
         let friendly_pawns = *board.get_bit_board(friendly_pieces[0]);
         let friendly_knights = *board.get_bit_board(friendly_pieces[1]);
@@ -581,21 +611,15 @@ impl MoveGenerator {
 
         let occupied_squares = friendly_piece_bit_board | enemy_piece_bit_board;
 
-        let diagonal_blockers = occupied_squares & relevant_bishop_blockers(king_square);
-        let diagonal_attacks = get_bishop_moves(king_square, diagonal_blockers);
-        let diagonal_attacker = diagonal_attacks & enemy_diagonal;
-        if diagonal_attacker.is_not_empty() {
-            return true;
-        }
-
-        let orthogonal_blockers = occupied_squares & relevant_rook_blockers(king_square);
-        let orthogonal_attacks = get_rook_moves(king_square, orthogonal_blockers);
-        let orthogonal_attacker = orthogonal_attacks & enemy_orthogonal;
-        if orthogonal_attacker.is_not_empty() {
-            return true;
-        }
-
-        false
+        Self::raw_calculate_is_in_check(
+            board.white_to_move,
+            friendly_king_square,
+            enemy_pawns,
+            enemy_knights,
+            enemy_diagonal,
+            enemy_orthogonal,
+            occupied_squares,
+        )
     }
 
     /// Returns whether the side to move is in check.
