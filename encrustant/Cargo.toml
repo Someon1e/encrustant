@@ -28,5 +28,5 @@ lto = true
 codegen-units = 1
 
 [features]
-default = ["spsa"]
+default = []
 spsa = []
