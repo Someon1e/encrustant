@@ -928,7 +928,7 @@ impl Search {
 
             self.unmake_move_repetition(&move_data, &old_state);
 
-            if ply_remaining > 1 && time_manager.hard_stop_inner_search(self.node_count) {
+            if time_manager.hard_stop_inner_search(self.node_count) {
                 return 0;
             }
 
