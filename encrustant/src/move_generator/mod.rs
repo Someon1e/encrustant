@@ -229,7 +229,7 @@ impl MoveGenerator {
         bishop_attacks
     }
 
-    const fn king_attack_bit_board(square: Square) -> BitBoard {
+    pub const fn king_attack_bit_board(square: Square) -> BitBoard {
         KING_MOVES_AT_SQUARE[square.usize()]
     }
 

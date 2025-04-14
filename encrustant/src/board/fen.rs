@@ -1,3 +1,5 @@
+use crate::move_generator::MoveGenerator;
+
 use super::{
     Board,
     bit_board::BitBoard,
@@ -14,6 +16,12 @@ pub enum FenParseErr {
 
     /// An invalid piece character was encountered in the position section of the FEN string.
     InvalidPiece,
+
+    MissingKing,
+
+    MultipleKings,
+
+    TouchingKings,
 
     /// An invalid digit was encountered in the position section (e.g., a number greater than 8 or incorrect rank structure).
     InvalidDigit,
@@ -69,6 +77,8 @@ impl Board {
             }
         };
 
+        let mut white_king_square = None;
+        let mut black_king_square = None;
         for character in position {
             if character == '/' {
                 continue;
@@ -83,8 +93,25 @@ impl Board {
                     return Err(FenParseErr::InvalidDigit);
                 }
             } else if let Some(piece) = Piece::from_fen_char(&character) {
-                let square = &Square::from_coords(rank, file);
-                bit_boards[piece as usize].set(square);
+                let square = Square::from_coords(rank, file);
+
+                match piece {
+                    Piece::WhiteKing => {
+                        if white_king_square.is_some() {
+                            return Err(FenParseErr::MultipleKings);
+                        }
+                        white_king_square = Some(square)
+                    }
+                    Piece::BlackKing => {
+                        if black_king_square.is_some() {
+                            return Err(FenParseErr::MultipleKings);
+                        }
+                        black_king_square = Some(square)
+                    }
+                    _ => {}
+                }
+
+                bit_boards[piece as usize].set(&square);
 
                 file += 1;
             } else {
@@ -98,6 +125,16 @@ impl Board {
                 rank -= 1;
                 file = 0;
             }
+        }
+
+        if white_king_square.is_none() || black_king_square.is_none() {
+            return Err(FenParseErr::MissingKing);
+        }
+
+        if MoveGenerator::king_attack_bit_board(white_king_square.unwrap())
+            .overlaps(&black_king_square.unwrap().bit_board())
+        {
+            return Err(FenParseErr::TouchingKings);
         }
 
         let white_to_move = match components.next() {
