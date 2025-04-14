@@ -201,6 +201,9 @@ impl Board {
             }
             parsed.unwrap()
         };
+        if en_passant_square.is_some() && half_move_clock != 0 {
+            return Err(FenParseErr::InvalidHalfMoveClock);
+        }
 
         let full_move_counter = {
             let component = components.next();
