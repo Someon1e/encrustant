@@ -142,7 +142,7 @@ impl MoveGenerator {
 }
 
 impl MoveGenerator {
-    fn calculate_check(
+    pub fn calculate_checkers(
         white_to_move: bool,
         king_square: Square,
         enemy_pawns: BitBoard,
@@ -398,7 +398,7 @@ impl MoveGenerator {
 
         let friendly_king_square = friendly_king.first_square();
 
-        let mut check_mask = Self::calculate_check(
+        let mut check_mask = Self::calculate_checkers(
             white_to_move,
             friendly_king_square,
             enemy_pawns,

@@ -54,6 +54,9 @@ pub enum FenParseErr {
 
     /// The castling rights section is missing from the FEN string.
     MissingCastling,
+
+    /// Side to move is in triple check or more.
+    TooManyChecks,
 }
 
 impl Board {
@@ -222,6 +225,54 @@ impl Board {
 
             game_state,
         };
+
+        let king_square = if white_to_move {
+            white_king_square.unwrap()
+        } else {
+            black_king_square.unwrap()
+        };
+
+        let occupied_squares = bit_boards[0]
+            | bit_boards[1]
+            | bit_boards[2]
+            | bit_boards[3]
+            | bit_boards[4]
+            | bit_boards[5]
+            | bit_boards[6]
+            | bit_boards[7]
+            | bit_boards[8]
+            | bit_boards[9]
+            | bit_boards[10]
+            | bit_boards[11];
+        let (enemy_pawns, enemy_knights, enemy_diagonal, enemy_orthogonal) = if white_to_move {
+            (
+                bit_boards[Piece::BlackPawn as usize],
+                bit_boards[Piece::BlackKnight as usize],
+                bit_boards[Piece::BlackBishop as usize] | bit_boards[Piece::BlackQueen as usize],
+                bit_boards[Piece::BlackRook as usize] | bit_boards[Piece::BlackQueen as usize],
+            )
+        } else {
+            (
+                bit_boards[Piece::WhitePawn as usize],
+                bit_boards[Piece::WhiteKnight as usize],
+                bit_boards[Piece::WhiteBishop as usize] | bit_boards[Piece::WhiteQueen as usize],
+                bit_boards[Piece::WhiteRook as usize] | bit_boards[Piece::WhiteQueen as usize],
+            )
+        };
+        if MoveGenerator::calculate_checkers(
+            white_to_move,
+            king_square,
+            enemy_pawns,
+            enemy_knights,
+            enemy_diagonal,
+            enemy_orthogonal,
+            occupied_squares,
+        )
+        .count()
+            >= 3
+        {
+            return Err(FenParseErr::TooManyChecks);
+        }
 
         Ok(board)
     }
