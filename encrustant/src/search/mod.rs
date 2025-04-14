@@ -786,7 +786,7 @@ impl Search {
                 } else {
                     param!(self).static_null_margin
                 };
-                if ply_remaining < param!(self).static_null_min_depth
+                if ply_remaining < param!(self).static_null_max_depth
                     && static_eval - i32::from(ply_remaining) * static_null_margin > beta
                 {
                     return static_eval;
