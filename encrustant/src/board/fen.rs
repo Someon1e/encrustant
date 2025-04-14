@@ -23,6 +23,8 @@ pub enum FenParseErr {
 
     TouchingKings,
 
+    PawnOnPromotionRank,
+
     /// An invalid digit was encountered in the position section (e.g., a number greater than 8 or incorrect rank structure).
     InvalidDigit,
 
@@ -107,6 +109,16 @@ impl Board {
                             return Err(FenParseErr::MultipleKings);
                         }
                         black_king_square = Some(square)
+                    }
+                    Piece::WhitePawn => {
+                        if BitBoard::RANK_8.get(&square) {
+                            return Err(FenParseErr::PawnOnPromotionRank);
+                        }
+                    }
+                    Piece::BlackPawn => {
+                        if BitBoard::RANK_1.get(&square) {
+                            return Err(FenParseErr::PawnOnPromotionRank);
+                        }
                     }
                     _ => {}
                 }
