@@ -37,7 +37,7 @@ pub struct MoveGenerator {
 
     en_passant_square: Option<Square>,
 
-    friendly_piece_bit_board: BitBoard,
+    friendly_pieces: BitBoard,
 
     friendly_pawns: BitBoard,
     friendly_knights: BitBoard,
@@ -46,14 +46,14 @@ pub struct MoveGenerator {
 
     friendly_king_square: Square,
 
-    king_danger_bit_board: BitBoard,
+    king_danger: BitBoard,
 
-    enemy_piece_bit_board: BitBoard,
+    enemy_pieces: BitBoard,
 
     enemy_orthogonal: BitBoard,
 
-    occupied_squares: BitBoard,
-    empty_squares: BitBoard,
+    occupied: BitBoard,
+    empty: BitBoard,
 
     is_in_check: bool,
     is_in_double_check: bool,
@@ -79,9 +79,9 @@ impl MoveGenerator {
         let mut non_pinned_knights =
             self.friendly_knights & !(self.diagonal_pin_rays | self.orthogonal_pin_rays);
 
-        let mut mask = (self.empty_squares | self.enemy_piece_bit_board) & self.check_mask;
+        let mut mask = (self.empty | self.enemy_pieces) & self.check_mask;
         if captures_only {
-            mask &= self.enemy_piece_bit_board;
+            mask &= self.enemy_pieces;
         }
 
         consume_bit_board!(non_pinned_knights, from {
@@ -100,12 +100,11 @@ impl MoveGenerator {
 
 impl MoveGenerator {
     fn gen_bishop<F: FnMut(Move)>(&self, from: Square, add_move: &mut F, captures_only: bool) {
-        let blockers = self.occupied_squares & relevant_bishop_blockers(from);
+        let blockers = self.occupied & relevant_bishop_blockers(from);
         let possible_moves = get_bishop_moves(from, blockers);
-        let mut legal_moves =
-            possible_moves & ((self.enemy_piece_bit_board | self.empty_squares) & self.check_mask);
+        let mut legal_moves = possible_moves & ((self.enemy_pieces | self.empty) & self.check_mask);
         if captures_only {
-            legal_moves &= self.enemy_piece_bit_board;
+            legal_moves &= self.enemy_pieces;
         }
         if self.diagonal_pin_rays.get(&from) {
             legal_moves &= self.diagonal_pin_rays;
@@ -120,12 +119,11 @@ impl MoveGenerator {
         });
     }
     fn gen_rook<F: FnMut(Move)>(&self, from: Square, add_move: &mut F, captures_only: bool) {
-        let blockers = self.occupied_squares & relevant_rook_blockers(from);
+        let blockers = self.occupied & relevant_rook_blockers(from);
         let possible_moves = get_rook_moves(from, blockers);
-        let mut legal_moves =
-            possible_moves & ((self.enemy_piece_bit_board | self.empty_squares) & self.check_mask);
+        let mut legal_moves = possible_moves & ((self.enemy_pieces | self.empty) & self.check_mask);
         if captures_only {
-            legal_moves &= self.enemy_piece_bit_board;
+            legal_moves &= self.enemy_pieces;
         }
         if self.orthogonal_pin_rays.get(&from) {
             legal_moves &= self.orthogonal_pin_rays;
@@ -236,10 +234,10 @@ impl MoveGenerator {
     #[allow(clippy::unreadable_literal)]
     fn gen_king<F: FnMut(Move)>(&self, add_move: &mut F, captures_only: bool) {
         let mut king_moves = Self::king_attack_bit_board(self.friendly_king_square)
-            & !self.friendly_piece_bit_board
-            & !self.king_danger_bit_board;
+            & !self.friendly_pieces
+            & !self.king_danger;
         if captures_only {
-            king_moves &= self.enemy_piece_bit_board;
+            king_moves &= self.enemy_pieces;
         }
 
         consume_bit_board!(king_moves, to {
@@ -254,7 +252,7 @@ impl MoveGenerator {
             return;
         }
 
-        let cannot_castle_into = self.occupied_squares | self.king_danger_bit_board;
+        let cannot_castle_into = self.occupied | self.king_danger;
         if self.king_side {
             let to = self.friendly_king_square.right(2);
             let castle_mask = if self.white_to_move {
@@ -279,7 +277,7 @@ impl MoveGenerator {
                 BitBoard::new(0b00001110 << 56)
             };
 
-            if !castle_block_mask.overlaps(&self.occupied_squares) {
+            if !castle_block_mask.overlaps(&self.occupied) {
                 let castle_mask = if self.white_to_move {
                     BitBoard::new(0b00001100)
                 } else {
@@ -371,7 +369,7 @@ impl MoveGenerator {
         let friendly_diagonal = friendly_bishops | friendly_queens;
         let friendly_orthogonal = friendly_rooks | friendly_queens;
 
-        let friendly_piece_bit_board = friendly_pawns
+        let friendly_pieces = friendly_pawns
             | friendly_knights
             | friendly_bishops
             | friendly_rooks
@@ -388,13 +386,13 @@ impl MoveGenerator {
 
         let enemy_diagonal = enemy_bishops | enemy_queens;
         let enemy_orthogonal = enemy_rooks | enemy_queens;
-        let enemy_piece_bit_board =
+        let enemy_pieces =
             enemy_pawns | enemy_knights | enemy_diagonal | enemy_orthogonal | enemy_king;
 
-        let occupied_squares = friendly_piece_bit_board | enemy_piece_bit_board;
-        let empty_squares = !occupied_squares;
+        let occupied = friendly_pieces | enemy_pieces;
+        let empty = !occupied;
 
-        let mut king_danger_bit_board = BitBoard::EMPTY;
+        let mut king_danger = BitBoard::EMPTY;
 
         let friendly_king_square = friendly_king.first_square();
 
@@ -405,7 +403,7 @@ impl MoveGenerator {
             enemy_knights,
             enemy_diagonal,
             enemy_orthogonal,
-            occupied_squares,
+            occupied,
         );
 
         let is_in_check = check_mask.is_not_empty();
@@ -433,13 +431,13 @@ impl MoveGenerator {
                 (enemy_pawns & not_on_the_left_edge) << 7
             };
 
-            king_danger_bit_board |= enemy_pawn_attacks;
+            king_danger |= enemy_pawn_attacks;
         };
         {
             let mut enemy_knights = enemy_knights;
             consume_bit_board!(enemy_knights, from {
                 let knight_attacks = Self::knight_attack_bit_board(from);
-                king_danger_bit_board |= knight_attacks;
+                king_danger |= knight_attacks;
             });
         };
         {
@@ -450,9 +448,9 @@ impl MoveGenerator {
                     friendly_king_square,
                     &mut check_mask,
                     friendly_king,
-                    occupied_squares,
+                    occupied,
                 );
-                king_danger_bit_board |= dangerous;
+                king_danger |= dangerous;
             });
         };
         {
@@ -463,15 +461,15 @@ impl MoveGenerator {
                     friendly_king_square,
                     &mut check_mask,
                     friendly_king,
-                    occupied_squares,
+                    occupied,
                 );
-                king_danger_bit_board |= dangerous;
+                king_danger |= dangerous;
             });
         };
         {
             let mut enemy_king = enemy_king;
             consume_bit_board!(enemy_king, from {
-                king_danger_bit_board |= Self::king_attack_bit_board(from);
+                king_danger |= Self::king_attack_bit_board(from);
             });
         };
 
@@ -480,11 +478,11 @@ impl MoveGenerator {
         }
 
         let (orthogonal_pin_rays, diagonal_pin_rays) = Self::calculate_pin_rays(
-            friendly_piece_bit_board,
+            friendly_pieces,
             friendly_king_square,
             enemy_orthogonal,
             enemy_diagonal,
-            enemy_piece_bit_board,
+            enemy_pieces,
         );
 
         Self {
@@ -492,17 +490,17 @@ impl MoveGenerator {
             king_side,
             queen_side,
             en_passant_square,
-            friendly_piece_bit_board,
+            friendly_pieces,
             friendly_pawns,
             friendly_knights,
             friendly_diagonal,
             friendly_orthogonal,
             friendly_king_square,
-            king_danger_bit_board,
-            enemy_piece_bit_board,
+            king_danger,
+            enemy_pieces,
             enemy_orthogonal,
-            occupied_squares,
-            empty_squares,
+            occupied,
+            empty,
             is_in_check,
             is_in_double_check,
             diagonal_pin_rays,
@@ -631,7 +629,7 @@ impl MoveGenerator {
     /// Returns the enemy piece bit board.
     #[must_use]
     pub const fn enemy_piece_bit_board(&self) -> BitBoard {
-        self.enemy_piece_bit_board
+        self.enemy_pieces
     }
 
     /// Returns the friendly pawns bit board.
@@ -643,6 +641,6 @@ impl MoveGenerator {
     /// Returns the friendly piece bit board.
     #[must_use]
     pub const fn friendly_pieces(&self) -> BitBoard {
-        self.friendly_piece_bit_board
+        self.friendly_pieces
     }
 }
