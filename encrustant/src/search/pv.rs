@@ -2,10 +2,10 @@
 
 use super::{Ply, encoded_move::EncodedMove};
 
-pub type PvTable = [[EncodedMove; Ply::MAX as usize]; Ply::MAX as usize];
+pub type PvTable = Box<[[EncodedMove; Ply::MAX as usize]; Ply::MAX as usize]>;
 pub type PvLength = [Ply; Ply::MAX as usize];
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Pv {
     pv_table: PvTable,
     pv_length: PvLength,
@@ -13,9 +13,11 @@ pub struct Pv {
 
 impl Pv {
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            pv_table: [[EncodedMove::NONE; Ply::MAX as usize]; Ply::MAX as usize],
+            pv_table: vec![[EncodedMove::NONE; Ply::MAX as usize]; Ply::MAX as usize]
+                .try_into()
+                .unwrap(),
             pv_length: [0; Ply::MAX as usize],
         }
     }

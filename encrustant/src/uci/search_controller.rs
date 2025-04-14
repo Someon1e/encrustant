@@ -153,7 +153,7 @@ fn search(
         out,
         &DepthSearchInfo {
             depth,
-            best: (search.pv, evaluation),
+            best: (&search.pv, evaluation),
             highest_depth: search.highest_depth,
             node_count: search.node_count(),
         },

@@ -64,8 +64,8 @@ macro_rules! param {
 }
 
 /// Search info at a depth.
-#[derive(Clone, Copy)]
-pub struct DepthSearchInfo {
+#[derive(Clone)]
+pub struct DepthSearchInfo<'a> {
     /// Depth searched at.
     pub depth: Ply,
 
@@ -73,7 +73,7 @@ pub struct DepthSearchInfo {
     pub highest_depth: Ply,
 
     /// The best move and evaluation.
-    pub best: (Pv, EvalNumber),
+    pub best: (&'a Pv, EvalNumber),
 
     /// How many times `make_move` was called in search
     pub node_count: u64,
@@ -1206,7 +1206,7 @@ impl Search {
             // Report results of search iteration
             depth_completed(DepthSearchInfo {
                 depth,
-                best: (self.pv, best_score),
+                best: (&self.pv, best_score),
                 highest_depth: self.highest_depth,
                 node_count: self.node_count,
             });
