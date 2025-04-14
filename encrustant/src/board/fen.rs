@@ -251,11 +251,11 @@ impl Board {
 
 #[cfg(test)]
 mod tests {
-    use crate::board::Board;
+    use crate::{board::Board, tests::TEST_FENS};
 
     #[test]
     fn test_fen_encoding() {
-        for (_, _, fen) in crate::tests::TEST_FENS {
+        for (_, _, fen) in TEST_FENS {
             let board = Board::from_fen(fen).unwrap();
             assert_eq!(fen, board.to_fen());
         }
