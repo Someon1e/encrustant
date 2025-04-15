@@ -27,7 +27,7 @@ const ROOK_PROMOTION_BONUS: MoveGuessNum = 0;
 const BISHOP_PROMOTION_BONUS: MoveGuessNum = 0;
 
 const CAPTURING_SCORE: [i32; 12] = {
-    const SCALE: i32 = 500;
+    const SCALE: i32 = 400;
 
     const PAWN: i32 = 10 * SCALE;
     const KNIGHT: i32 = 30 * SCALE;
