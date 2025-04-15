@@ -7,7 +7,7 @@ use crate::{
 use core::fmt;
 
 /// A piece move, bit-packed.
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct EncodedMove(u16);
 
 impl EncodedMove {

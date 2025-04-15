@@ -9,7 +9,7 @@ use super::{
     slider_lookup::{get_rook_moves, relevant_rook_blockers},
 };
 
-pub(crate) struct PawnAttacks {
+pub struct PawnAttacks {
     pub white_pawn_attacks_at_square: [BitBoard; 64],
     pub black_pawn_attacks_at_square: [BitBoard; 64],
 }
@@ -112,7 +112,7 @@ pub fn generate<F: FnMut(Move)>(
         let capture_right_offset = if move_generator.white_to_move { -9 } else { 9 };
         let capture_left_offset = if move_generator.white_to_move { -7 } else { 7 };
 
-        let can_capture = move_generator.enemy_piece_bit_board & move_generator.check_mask;
+        let can_capture = move_generator.enemy_pieces & move_generator.check_mask;
         let capture_right = if move_generator.white_to_move {
             (non_orthogonally_pinned_pawns & not_on_the_right_edge) << 9
         } else {
@@ -198,9 +198,7 @@ pub fn generate<F: FnMut(Move)>(
                     // Check by pretending the king is a rook to find enemy queens/rooks that are not obstructed
                     let unblocked = get_rook_moves(
                         move_generator.friendly_king_square,
-                        (move_generator.occupied_squares
-                            ^ from.bit_board()
-                            ^ capture_position.bit_board())
+                        (move_generator.occupied ^ from.bit_board() ^ capture_position.bit_board())
                             & relevant_rook_blockers(move_generator.friendly_king_square),
                     );
 
@@ -226,9 +224,9 @@ pub fn generate<F: FnMut(Move)>(
 
     let __can_single_push = (move_generator.friendly_pawns & !move_generator.diagonal_pin_rays)
         & if move_generator.white_to_move {
-            move_generator.empty_squares >> 8
+            move_generator.empty >> 8
         } else {
-            move_generator.empty_squares << 8
+            move_generator.empty << 8
         };
     let _can_double_push = __can_single_push
         & if move_generator.white_to_move {
@@ -237,9 +235,9 @@ pub fn generate<F: FnMut(Move)>(
             BitBoard::RANK_7
         }
         & if move_generator.white_to_move {
-            (move_generator.empty_squares & move_generator.check_mask) >> 16
+            (move_generator.empty & move_generator.check_mask) >> 16
         } else {
-            (move_generator.empty_squares & move_generator.check_mask) << 16
+            (move_generator.empty & move_generator.check_mask) << 16
         };
 
     // Move pawn one square up

@@ -12,7 +12,6 @@ pub mod transposition;
 pub mod zobrist;
 
 use pv::Pv;
-use search_params::{DEFAULT_TUNABLES, Tunable};
 use time_manager::TimeManager;
 use zobrist::Zobrist;
 
@@ -54,7 +53,7 @@ const USE_FUTILITY_PRUNING: bool = true;
 #[cfg(not(feature = "spsa"))]
 macro_rules! param {
     ($self:expr) => {
-        DEFAULT_TUNABLES
+        crate::search::search_params::DEFAULT_TUNABLES
     };
 }
 #[cfg(feature = "spsa")]
@@ -65,8 +64,8 @@ macro_rules! param {
 }
 
 /// Search info at a depth.
-#[derive(Clone, Copy)]
-pub struct DepthSearchInfo {
+#[derive(Clone)]
+pub struct DepthSearchInfo<'a> {
     /// Depth searched at.
     pub depth: Ply,
 
@@ -74,15 +73,18 @@ pub struct DepthSearchInfo {
     pub highest_depth: Ply,
 
     /// The best move and evaluation.
-    pub best: (Pv, EvalNumber),
+    pub best: (&'a Pv, EvalNumber),
 
     /// How many times `make_move` was called in search
     pub node_count: u64,
+
+    pub hash_full: u16,
 }
 
 const PAWN_CORRECTION_HISTORY_LENGTH: usize = 8192;
 const MINOR_PIECE_CORRECTION_HISTORY_LENGTH: usize = 8192;
 
+/// Information used in search about the position.
 #[derive(Clone, Copy, Debug)]
 pub struct SearchState {
     total_middle_game_score: EvalNumber,
@@ -91,10 +93,11 @@ pub struct SearchState {
     /// Position zobrist key.
     pub position_zobrist_key: Zobrist,
 
-    // Pawn zobrist key.
+    /// Pawn zobrist key.
     pub pawn_zobrist_key: Zobrist,
 }
 
+/// A combination of `GameState` and `SearchState`.
 pub struct ExtendedState {
     game_state: GameState,
     search_state: SearchState,
@@ -126,7 +129,7 @@ pub struct Search {
     node_count: u64,
 
     #[cfg(feature = "spsa")]
-    tunable: Tunable,
+    tunable: crate::search::search_params::Tunable,
 }
 
 impl Search {
@@ -135,7 +138,7 @@ impl Search {
     pub fn new(
         board: Board,
         transposition_capacity: usize,
-        #[cfg(feature = "spsa")] tunable: Tunable,
+        #[cfg(feature = "spsa")] tunable: crate::search::search_params::Tunable,
     ) -> Self {
         let (total_middle_game_score, total_end_game_score) = Eval::raw_evaluate(&board);
         let position_zobrist_key = Zobrist::compute(&board);
@@ -787,7 +790,7 @@ impl Search {
                 } else {
                     param!(self).static_null_margin
                 };
-                if ply_remaining < param!(self).static_null_min_depth
+                if ply_remaining < param!(self).static_null_max_depth
                     && static_eval - i32::from(ply_remaining) * static_null_margin > beta
                 {
                     return static_eval;
@@ -1097,7 +1100,7 @@ impl Search {
                     minor_piece_index,
                     error,
                     param!(self).minor_piece_correction_history_grain,
-                )
+                );
             }
         }
 
@@ -1205,9 +1208,10 @@ impl Search {
             // Report results of search iteration
             depth_completed(DepthSearchInfo {
                 depth,
-                best: (self.pv, best_score),
+                best: (&self.pv, best_score),
                 highest_depth: self.highest_depth,
                 node_count: self.node_count,
+                hash_full: self.hash_full(),
             });
 
             if depth == Ply::MAX {
@@ -1249,7 +1253,7 @@ impl Search {
     #[must_use]
     fn get_correction(
         &self,
-        mut evaluation: EvalNumber,
+        evaluation: EvalNumber,
         pawn_index: u64,
         minor_piece_index: u64,
     ) -> EvalNumber {
@@ -1299,6 +1303,19 @@ impl Search {
 
         correction_history[usize::from(white_to_move)][index as usize] = entry as i16;
     }
+
+    #[must_use]
+    pub fn hash_full(&self) -> u16 {
+        const SAMPLES: usize = 10000;
+
+        let mut count = 0;
+        for entry in self.transposition_table.iter().take(SAMPLES) {
+            if entry.is_some() {
+                count += 1;
+            }
+        }
+        (count * 1000 / SAMPLES as u32) as u16
+    }
 }
 
 #[cfg(test)]
@@ -1306,7 +1323,7 @@ mod tests {
     use crate::{
         board::Board,
         evaluation::{Eval, eval_data::EvalNumber},
-        search::{Search, search_params::DEFAULT_TUNABLES, transposition::megabytes_to_capacity},
+        search::{Search, transposition::megabytes_to_capacity},
     };
 
     #[test]
@@ -1322,7 +1339,7 @@ mod tests {
                 board,
                 megabytes_to_capacity(8),
                 #[cfg(feature = "spsa")]
-                DEFAULT_TUNABLES,
+                crate::search::search_params::DEFAULT_TUNABLES,
             )
             .quiescence_search(-EvalNumber::MAX, EvalNumber::MAX),
             Eval::evaluate(&quiet)

@@ -1,6 +1,6 @@
 //! Universal Chess Protocol
 
-use core::ops::{Range, RangeInclusive};
+use core::ops::Range;
 use core::str::SplitWhitespace;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,10 +17,7 @@ use crate::{
     board::{Board, square::Square},
     move_generator::move_data::Flag,
     perft::perft_root,
-    search::{
-        search_params::{DEFAULT_TUNABLES, Tunable},
-        transposition::megabytes_to_capacity,
-    },
+    search::transposition::megabytes_to_capacity,
     timer::Time,
 };
 
@@ -32,6 +29,9 @@ pub struct SpinU16 {
     default: u16,
 }
 impl SpinU16 {
+    /// # Panics
+    ///
+    /// Will panic if the default value is not contained with the range.
     #[must_use]
     pub fn new(range: Range<u16>, default: u16) -> Self {
         assert!(range.contains(&default));
@@ -70,7 +70,7 @@ pub struct UCIProcessor {
     search_controller: Option<SearchController>,
 
     #[cfg(feature = "spsa")]
-    pub tunables: Tunable,
+    pub tunables: crate::search::search_params::Tunable,
 }
 
 #[derive(Clone)]
@@ -78,6 +78,9 @@ pub struct PonderInfo {
     ponder_allowed: bool,
     is_pondering: Bool,
 }
+
+#[cfg(feature = "spsa")]
+use std::ops::RangeInclusive;
 
 #[cfg(feature = "spsa")]
 struct TunableRange {
@@ -215,7 +218,7 @@ impl UCIProcessor {
             transposition_capacity,
             search_controller: None,
             #[cfg(feature = "spsa")]
-            tunables: DEFAULT_TUNABLES,
+            tunables: crate::search::search_params::DEFAULT_TUNABLES,
         }
     }
     fn set_transposition_capacity(&mut self, transposition_capacity: usize) {
@@ -253,7 +256,7 @@ option name Threads type spin default 1 min 1 max 1"
                     $(
                         spin!(
                             stringify!($field),
-                            DEFAULT_TUNABLES.$field,
+                            crate::search::search_params::DEFAULT_TUNABLES.$field,
                             TUNABLE_RANGES.$field.start(),
                             TUNABLE_RANGES.$field.end()
                         );
@@ -517,11 +520,9 @@ uciok",
                 let search_controller = self.search_controller.as_mut().unwrap();
                 search_controller.set_position(board, self.moves.clone());
 
-                let mated_in_plies = if let Some(mate_in_moves) = search_time.mate_in_moves() {
-                    Some((2 * mate_in_moves - 1) as u8)
-                } else {
-                    None
-                };
+                let mated_in_plies = search_time
+                    .mate_in_moves()
+                    .map(|mate_in_moves| 2 * mate_in_moves - 1);
 
                 search_controller.search(
                     self.stopped.clone(),

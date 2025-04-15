@@ -89,7 +89,7 @@ pub struct GoParameters {
 impl GoParameters {
     /// Returns empty parameters
     #[must_use]
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self { search_type: None }
     }
 
@@ -113,7 +113,7 @@ impl GoParameters {
                                 "search parameters specified when search type already determined"
                             )
                         }
-                    };
+                    }
                     let search_time = match self.search_type {
                         Some(SearchType::Normal(ref mut search_time)) => search_time,
                         _ => unreachable!(),
@@ -172,7 +172,7 @@ impl GoParameters {
                         "mate" => {
                             assert!(search_time.mate_in_moves.is_none(), "Overwritten mate");
                             let mate_in_moves = parse_number!().unwrap();
-                            const MAX_MOVES: u32 = (Ply::MAX as u32 + 1) / 2;
+                            const MAX_MOVES: u32 = (Ply::MAX as u32).div_ceil(2);
                             assert!(mate_in_moves < MAX_MOVES as Ply);
                             search_time.mate_in_moves = Some(mate_in_moves);
                         }

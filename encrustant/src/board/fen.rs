@@ -1,3 +1,5 @@
+use crate::move_generator::MoveGenerator;
+
 use super::{
     Board,
     bit_board::BitBoard,
@@ -14,6 +16,14 @@ pub enum FenParseErr {
 
     /// An invalid piece character was encountered in the position section of the FEN string.
     InvalidPiece,
+
+    MissingKing,
+
+    MultipleKings,
+
+    TouchingKings,
+
+    PawnOnPromotionRank,
 
     /// An invalid digit was encountered in the position section (e.g., a number greater than 8 or incorrect rank structure).
     InvalidDigit,
@@ -44,6 +54,12 @@ pub enum FenParseErr {
 
     /// The castling rights section is missing from the FEN string.
     MissingCastling,
+
+    /// Side to move is in triple check or more.
+    TooManyChecks,
+
+    /// Enemy is in check.
+    EnemyInCheck,
 }
 
 impl Board {
@@ -69,6 +85,8 @@ impl Board {
             }
         };
 
+        let mut white_king_square = None;
+        let mut black_king_square = None;
         for character in position {
             if character == '/' {
                 continue;
@@ -82,15 +100,40 @@ impl Board {
                 if file > 8 {
                     return Err(FenParseErr::InvalidDigit);
                 }
-            } else {
-                if let Some(piece) = Piece::from_fen_char(&character) {
-                    let square = &Square::from_coords(rank, file);
-                    bit_boards[piece as usize].set(square);
+            } else if let Some(piece) = Piece::from_fen_char(&character) {
+                let square = Square::from_coords(rank, file);
 
-                    file += 1;
-                } else {
-                    return Err(FenParseErr::InvalidPiece);
+                match piece {
+                    Piece::WhiteKing => {
+                        if white_king_square.is_some() {
+                            return Err(FenParseErr::MultipleKings);
+                        }
+                        white_king_square = Some(square)
+                    }
+                    Piece::BlackKing => {
+                        if black_king_square.is_some() {
+                            return Err(FenParseErr::MultipleKings);
+                        }
+                        black_king_square = Some(square)
+                    }
+                    Piece::WhitePawn => {
+                        if BitBoard::RANK_8.get(&square) {
+                            return Err(FenParseErr::PawnOnPromotionRank);
+                        }
+                    }
+                    Piece::BlackPawn => {
+                        if BitBoard::RANK_1.get(&square) {
+                            return Err(FenParseErr::PawnOnPromotionRank);
+                        }
+                    }
+                    _ => {}
                 }
+
+                bit_boards[piece as usize].set(&square);
+
+                file += 1;
+            } else {
+                return Err(FenParseErr::InvalidPiece);
             }
 
             if file == 8 {
@@ -100,6 +143,16 @@ impl Board {
                 rank -= 1;
                 file = 0;
             }
+        }
+
+        if white_king_square.is_none() || black_king_square.is_none() {
+            return Err(FenParseErr::MissingKing);
+        }
+
+        if MoveGenerator::king_attack_bit_board(white_king_square.unwrap())
+            .overlaps(&black_king_square.unwrap().bit_board())
+        {
+            return Err(FenParseErr::TouchingKings);
         }
 
         let white_to_move = match components.next() {
@@ -128,10 +181,14 @@ impl Board {
             None
         } else {
             let en_passant_square = Square::from_notation(en_passant);
-            if en_passant_square.is_err() {
+            if let Ok(en_passant_square) = en_passant_square {
+                if en_passant_square.rank() != if white_to_move { 5 } else { 2 } {
+                    return Err(FenParseErr::InvalidEnPassant);
+                }
+                Some(en_passant_square)
+            } else {
                 return Err(FenParseErr::InvalidEnPassant);
             }
-            Some(en_passant_square.unwrap())
         };
         let half_move_clock = {
             let component = components.next();
@@ -144,6 +201,9 @@ impl Board {
             }
             parsed.unwrap()
         };
+        if en_passant_square.is_some() && half_move_clock != 0 {
+            return Err(FenParseErr::InvalidHalfMoveClock);
+        }
 
         let full_move_counter = {
             let component = components.next();
@@ -175,6 +235,81 @@ impl Board {
 
             game_state,
         };
+
+        let (friendly_king_square, enemy_king_square) = if white_to_move {
+            (white_king_square.unwrap(), black_king_square.unwrap())
+        } else {
+            (black_king_square.unwrap(), white_king_square.unwrap())
+        };
+
+        let occupied_squares = bit_boards[0]
+            | bit_boards[1]
+            | bit_boards[2]
+            | bit_boards[3]
+            | bit_boards[4]
+            | bit_boards[5]
+            | bit_boards[6]
+            | bit_boards[7]
+            | bit_boards[8]
+            | bit_boards[9]
+            | bit_boards[10]
+            | bit_boards[11];
+
+        let (
+            (friendly_pawns, friendly_knights, friendly_diagonal, friendly_orthogonal),
+            (enemy_pawns, enemy_knights, enemy_diagonal, enemy_orthogonal),
+        ) = {
+            let black = (
+                bit_boards[Piece::BlackPawn as usize],
+                bit_boards[Piece::BlackKnight as usize],
+                bit_boards[Piece::BlackBishop as usize] | bit_boards[Piece::BlackQueen as usize],
+                bit_boards[Piece::BlackRook as usize] | bit_boards[Piece::BlackQueen as usize],
+            );
+            let white = (
+                bit_boards[Piece::WhitePawn as usize],
+                bit_boards[Piece::WhiteKnight as usize],
+                bit_boards[Piece::WhiteBishop as usize] | bit_boards[Piece::WhiteQueen as usize],
+                bit_boards[Piece::WhiteRook as usize] | bit_boards[Piece::WhiteQueen as usize],
+            );
+            if white_to_move {
+                (white, black)
+            } else {
+                (black, white)
+            }
+        };
+        if MoveGenerator::calculate_checkers(
+            white_to_move,
+            friendly_king_square,
+            enemy_pawns,
+            enemy_knights,
+            enemy_diagonal,
+            enemy_orthogonal,
+            occupied_squares,
+        )
+        .count()
+            >= 3
+        {
+            return Err(FenParseErr::TooManyChecks);
+        }
+        if MoveGenerator::raw_calculate_is_in_check(
+            !white_to_move,
+            enemy_king_square,
+            friendly_pawns,
+            friendly_knights,
+            friendly_diagonal,
+            friendly_orthogonal,
+            occupied_squares,
+        ) {
+            return Err(FenParseErr::EnemyInCheck);
+        }
+
+        if let Some(en_passant_square) = en_passant_square {
+            let en_passant_pawn_position =
+                en_passant_square.down(if board.white_to_move { 1 } else { -1 });
+            if !enemy_pawns.get(&en_passant_pawn_position) {
+                return Err(FenParseErr::InvalidEnPassant);
+            }
+        }
 
         Ok(board)
     }
@@ -251,11 +386,11 @@ impl Board {
 
 #[cfg(test)]
 mod tests {
-    use crate::board::Board;
+    use crate::{board::Board, tests::TEST_FENS};
 
     #[test]
     fn test_fen_encoding() {
-        for (_, _, fen) in crate::tests::TEST_FENS {
+        for (_, _, fen) in TEST_FENS {
             let board = Board::from_fen(fen).unwrap();
             assert_eq!(fen, board.to_fen());
         }

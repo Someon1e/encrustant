@@ -19,3 +19,10 @@ path = "fuzz_targets/fen_parsing.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "evaluation"
+path = "fuzz_targets/evaluation.rs"
+test = false
+doc = false
+bench = false

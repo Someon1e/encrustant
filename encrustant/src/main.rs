@@ -2,16 +2,17 @@
 #![warn(clippy::pedantic)]
 #![warn(clippy::nursery)]
 
+use std::io::{stdout, Write};
 use std::{
     env,
     io::stdin,
-    sync::{Arc, atomic::AtomicBool},
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use core::cell::RefCell;
 use encrustant::{
     board::Board,
-    search::{Search, time_manager::TimeManager, transposition::megabytes_to_capacity},
+    search::{time_manager::TimeManager, transposition::megabytes_to_capacity, Search},
     timer::Time,
     uci::{GoParameters, SpinU16, UCIProcessor},
 };
@@ -28,7 +29,10 @@ pub fn out(output: &str) {
     };
 
     #[cfg(not(target_arch = "wasm32"))]
-    println!("{output}");
+    {
+        println!("{output}");
+        stdout().flush().unwrap();
+    }
 }
 
 thread_local! {
@@ -37,7 +41,7 @@ thread_local! {
             out(output);
         },
 
-        SpinU16::new(8..2049, 32),
+        SpinU16::new(8..8193, 32),
     ));
 
     #[cfg(target_arch = "wasm32")]
@@ -603,7 +607,7 @@ fn bench() {
 
         let result = search.iterative_deepening(&time_manager, &mut |_| {});
         out(&format!("{position} {depth} {}", search.node_count()));
-        total_nodes += u64::from(search.node_count());
+        total_nodes += search.node_count();
     }
     out(&format!(
         "{total_nodes} nodes {nodes_per_second} nps",
@@ -619,7 +623,7 @@ fn process_input(input: &str) -> bool {
         "go" => {
             let mut parameters = GoParameters::empty();
             parameters.parse(&mut args);
-            uci_processor.borrow_mut().go(parameters)
+            uci_processor.borrow_mut().go(parameters);
         }
         "position" => uci_processor.borrow_mut().position(&mut args),
         "ucinewgame" => uci_processor.borrow_mut().ucinewgame(),

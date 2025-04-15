@@ -1,6 +1,7 @@
 //! Represents a chess position.
 
 use core::fmt::Display;
+use std::num::NonZeroU32;
 
 /// Implements bit boards.
 pub mod bit_board;
@@ -32,7 +33,7 @@ pub struct Board {
     pub bit_boards: [BitBoard; 12],
 
     /// The number of full moves.
-    pub full_move_counter: u32,
+    pub full_move_counter: NonZeroU32,
 
     /// State of the game.
     pub game_state: GameState,
