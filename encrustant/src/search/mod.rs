@@ -1147,7 +1147,7 @@ impl Search {
                     // -EvalNumber::MAX = -2147483647
                     // EvalNumber::MIN = -2147483648
 
-                    beta = i64::midpoint(i64::from(alpha), i64::from(beta)) as i32;
+                    beta = ((i64::from(alpha) + i64::from(beta)) / 2) as i32;
                 } else if best_score >= beta {
                     beta = beta.saturating_add(param!(self).aspiration_window_growth);
                 } else {
