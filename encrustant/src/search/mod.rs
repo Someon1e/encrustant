@@ -732,6 +732,7 @@ impl Search {
             hash_move = self.pv.root_best_move();
         }
         if USE_INTERNAL_ITERATIVE_REDUCTION
+            && !is_not_pv_node // Only do IIR in pv nodes
             && hash_move.is_none()
             && ply_remaining > param!(self).iir_min_depth
         {
