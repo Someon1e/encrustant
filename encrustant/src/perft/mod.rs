@@ -3,14 +3,18 @@
 use crate::{board::Board, move_generator::MoveGenerator, uci};
 
 fn perft(board: &mut Board, depth: u16) -> u64 {
-    if depth == 0 {
-        return 1;
+    #[cfg(test)]
+    {
+        if depth == 0 {
+            return 1;
+        }
     }
 
     let mut move_count = 0;
     MoveGenerator::new(board).generate(
         &mut |move_data| {
-            if !cfg!(test) && depth == 1 {
+            #[cfg(not(test))]
+            if depth == 1 {
                 move_count += 1;
                 return;
             }
@@ -31,7 +35,8 @@ pub fn perft_root(board: &mut Board, depth: u16, log: fn(&str)) -> u64 {
     let mut move_count = 0;
     MoveGenerator::new(board).generate(
         &mut |move_data| {
-            if !cfg!(test) && depth == 1 {
+            #[cfg(not(test))]
+            if depth == 1 {
                 log(&format!("{}: 1", uci::encode_move(move_data)));
                 move_count += 1;
                 return;
