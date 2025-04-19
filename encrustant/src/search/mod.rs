@@ -701,32 +701,32 @@ impl Search {
         let is_not_pv_node = alpha + 1 == beta;
 
         // Get value from transposition table
-        let saved = if let Some(saved) = self.transposition_table[zobrist_index] {
+        let mut saved = None;
+        if let Some(entry) = self.transposition_table[zobrist_index] {
             // Check if it's actually the same position
-            if saved.zobrist_key_32 == zobrist_key.lower_u32() {
+            if entry.zobrist_key_32 == zobrist_key.lower_u32() {
+                let value = transposition::retrieve_mate_score(entry.value, ply_from_root);
+
                 // Check if the saved depth is as high as the depth now
-                if saved.ply_remaining >= ply_remaining {
-                    let node_type = &saved.node_type;
+                if entry.ply_remaining >= ply_remaining {
+                    let node_type = &entry.node_type;
                     if match node_type {
                         NodeType::Exact => is_not_pv_node,
-                        NodeType::Beta => saved.value >= beta,
-                        NodeType::Alpha => saved.value <= alpha,
+                        NodeType::Beta => value >= beta,
+                        NodeType::Alpha => value <= alpha,
                     } {
-                        self.pv.update_move(ply_from_root, saved.transposition_move);
+                        self.pv.update_move(ply_from_root, entry.transposition_move);
 
-                        return saved.value;
+                        return value;
                     }
                 }
 
-                hash_move = saved.transposition_move;
+                hash_move = entry.transposition_move;
 
-                Some(saved)
-            } else {
-                None
+                saved = Some((value, entry.node_type));
             }
-        } else {
-            None
-        };
+        }
+
         if ply_from_root == 0 {
             // Use iterative deepening move as hash move
             hash_move = self.pv.root_best_move();
@@ -755,16 +755,16 @@ impl Search {
 
         let static_eval = {
             let mut static_eval = self.static_evaluate();
-            if let Some(saved) = saved {
+            if let Some((saved_value, saved_node_type)) = saved {
                 // Use saved value as better static evaluation
-                if !Self::score_is_checkmate(saved.value)
-                    && match saved.node_type {
+                if !Self::score_is_checkmate(saved_value)
+                    && match saved_node_type {
                         NodeType::Exact => true,
-                        NodeType::Beta => saved.value > static_eval,
-                        NodeType::Alpha => saved.value < static_eval,
+                        NodeType::Beta => saved_value > static_eval,
+                        NodeType::Alpha => saved_value < static_eval,
                     }
                 {
-                    static_eval = saved.value;
+                    static_eval = saved_value;
                 }
             }
 
@@ -1109,7 +1109,7 @@ impl Search {
             zobrist_key_32: zobrist_key.lower_u32(),
             ply_remaining,
             node_type,
-            value: best_score,
+            value: transposition::normalise_mate_score(best_score, ply_from_root),
             transposition_move: if best_move.is_none() {
                 hash_move
             } else {

@@ -1,6 +1,6 @@
 //! Transposition table utilities.
 
-use super::{Ply, encoded_move::EncodedMove, eval_data::EvalNumber};
+use super::{CHECKMATE_SCORE, Ply, encoded_move::EncodedMove, eval_data::EvalNumber};
 
 #[derive(Clone, Copy)]
 pub(super) struct NodeValue {
@@ -31,4 +31,26 @@ pub const MEMORY_OF_ONE_ENTRY_IN_BYTES: usize = core::mem::size_of::<Option<Node
 #[must_use]
 pub const fn megabytes_to_capacity(megabytes: usize) -> usize {
     (megabytes * 1_000_000) / MEMORY_OF_ONE_ENTRY_IN_BYTES
+}
+
+#[must_use]
+pub fn normalise_mate_score(score: EvalNumber, ply_from_root: Ply) -> EvalNumber {
+    if score >= CHECKMATE_SCORE {
+        score + EvalNumber::from(ply_from_root)
+    } else if score <= -CHECKMATE_SCORE {
+        score - EvalNumber::from(ply_from_root)
+    } else {
+        score
+    }
+}
+
+#[must_use]
+pub fn retrieve_mate_score(score: EvalNumber, ply_from_root: Ply) -> EvalNumber {
+    if score >= CHECKMATE_SCORE {
+        score - EvalNumber::from(ply_from_root)
+    } else if score <= -CHECKMATE_SCORE {
+        score + EvalNumber::from(ply_from_root)
+    } else {
+        score
+    }
 }
