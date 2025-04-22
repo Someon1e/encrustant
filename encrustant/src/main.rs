@@ -2,17 +2,17 @@
 #![warn(clippy::pedantic)]
 #![warn(clippy::nursery)]
 
-use std::io::{stdout, Write};
+use std::io::{Write, stdout};
 use std::{
     env,
     io::stdin,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
 };
 
 use core::cell::RefCell;
 use encrustant::{
     board::Board,
-    search::{time_manager::TimeManager, transposition::megabytes_to_capacity, Search},
+    search::{Search, time_manager::TimeManager, transposition::megabytes_to_capacity},
     timer::Time,
     uci::{GoParameters, SpinU16, UCIProcessor},
 };
