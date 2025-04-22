@@ -1027,6 +1027,7 @@ impl Search {
             } else {
                 if is_not_pv_node && !move_generator.is_in_check() {
                     if USE_FUTILITY_PRUNING
+                        && best_score > -CHECKMATE_SCORE // Do not prune if we might find a move to avoid getting checkmated
                         && static_eval + param!(self).futility_margin * i32::from(ply_remaining)
                             < alpha
                     {
