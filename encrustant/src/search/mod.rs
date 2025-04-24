@@ -854,7 +854,7 @@ impl Search {
         let mut index = 0;
         loop {
             let encoded_move_data = unsafe {
-                // SAFETY: `put_highest_guessed_move` guarantees that `move_guesses[0..move_count]` are initialised.
+                // SAFETY: `get_move_guesses` guarantees that `move_guesses[0..move_count]` are initialised.
                 // `index` can not be higher than `move_count`, due to the loop condition.
 
                 MoveOrderer::put_highest_guessed_move(&mut move_guesses, index, move_count)
