@@ -3,6 +3,7 @@
 #[derive(Clone, Copy)]
 pub struct Tunable {
     pub iir_min_depth: u8,
+    pub pv_iir_min_depth: u8,
     pub iir_depth_reduction: u8,
 
     pub futility_margin: i32,
@@ -73,6 +74,7 @@ pub(crate) const DEFAULT_TUNABLES: Tunable = Tunable {
 
     history_decay: 9,
     iir_min_depth: 5,
+    pv_iir_min_depth: 4,
     futility_margin: 105,
     static_null_margin: 56,
     lmr_min_index: 6,

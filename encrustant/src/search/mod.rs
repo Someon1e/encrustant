@@ -724,12 +724,17 @@ impl Search {
             // Use iterative deepening move as hash move
             hash_move = self.pv.root_best_move();
         }
-        if USE_INTERNAL_ITERATIVE_REDUCTION
-            && hash_move.is_none()
-            && ply_remaining > param!(self).iir_min_depth
-        {
-            // Internal iterative reduction
-            ply_remaining = ply_remaining.saturating_sub(param!(self).iir_depth_reduction);
+
+        if USE_INTERNAL_ITERATIVE_REDUCTION && hash_move.is_none() {
+            let min_depth = if is_not_pv_node {
+                param!(self).iir_min_depth
+            } else {
+                param!(self).pv_iir_min_depth
+            };
+            if ply_remaining > min_depth {
+                // Internal iterative reduction
+                ply_remaining = ply_remaining.saturating_sub(param!(self).iir_depth_reduction);
+            }
         }
 
         if ply_remaining == 0 {
