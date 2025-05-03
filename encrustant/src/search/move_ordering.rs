@@ -19,10 +19,10 @@ const MAX_LEGAL_MOVES: usize = 218;
 const MAX_CAPTURES: usize = 74;
 
 const HASH_MOVE_BONUS: MoveGuessNum = MoveGuessNum::MAX;
-const QUEEN_PROMOTION_BONUS: MoveGuessNum = 50_000_000;
-const CAPTURE_BONUS: MoveGuessNum = 50_000_000;
+const CAPTURE_BONUS: MoveGuessNum = 100_000_000;
 const KILLER_MOVE_BONUS: MoveGuessNum = 30_000_000;
-const KNIGHT_PROMOTION_BONUS: MoveGuessNum = 20_000_000;
+const QUEEN_PROMOTION_BONUS: MoveGuessNum = 20_000_000;
+const KNIGHT_PROMOTION_BONUS: MoveGuessNum = 10_000_000;
 const ROOK_PROMOTION_BONUS: MoveGuessNum = 0;
 const BISHOP_PROMOTION_BONUS: MoveGuessNum = 0;
 
@@ -49,7 +49,7 @@ impl MoveOrderer {
         let moving_from = move_data.from;
         let moving_to = move_data.to;
 
-        match move_data.flag {
+        let mut score = match move_data.flag {
             Flag::EnPassant | Flag::Castle | Flag::PawnTwoUp => {
                 return MoveGuessNum::from(
                     search.quiet_history[usize::from(search.board.white_to_move)]
@@ -57,15 +57,13 @@ impl MoveOrderer {
                 );
             }
 
-            Flag::BishopPromotion => return BISHOP_PROMOTION_BONUS,
-            Flag::KnightPromotion => return KNIGHT_PROMOTION_BONUS,
-            Flag::RookPromotion => return ROOK_PROMOTION_BONUS,
-            Flag::QueenPromotion => return QUEEN_PROMOTION_BONUS,
+            Flag::BishopPromotion => BISHOP_PROMOTION_BONUS,
+            Flag::KnightPromotion => KNIGHT_PROMOTION_BONUS,
+            Flag::RookPromotion => ROOK_PROMOTION_BONUS,
+            Flag::QueenPromotion => QUEEN_PROMOTION_BONUS,
 
-            Flag::None => {}
-        }
-
-        let mut score = 0;
+            Flag::None => 0,
+        };
 
         // This won't consider en passant
         if let Some(capturing) = search.board.enemy_piece_at(moving_to) {
@@ -135,8 +133,8 @@ impl MoveOrderer {
             Flag::BishopPromotion => return -1,
             Flag::RookPromotion => return -1,
 
-            Flag::KnightPromotion => 1300,
-            Flag::QueenPromotion => 1900,
+            Flag::KnightPromotion => 690,
+            Flag::QueenPromotion => 1000,
 
             Flag::None => 0,
 
