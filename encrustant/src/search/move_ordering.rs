@@ -225,10 +225,13 @@ impl MoveOrderer {
 
                 let guess = if encoded == hash_move {
                     HASH_MOVE_BONUS
-                } else if encoded == killer_move {
-                    KILLER_MOVE_BONUS
                 } else {
-                    Self::guess_move_value(search, move_data)
+                    let mut guess = 0;
+                    if encoded == killer_move {
+                        guess += KILLER_MOVE_BONUS
+                    }
+                    guess += Self::guess_move_value(search, move_data);
+                    guess
                 };
 
                 move_guesses[index].write(MoveGuess {
