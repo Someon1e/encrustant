@@ -19,10 +19,10 @@ const MAX_LEGAL_MOVES: usize = 218;
 const MAX_CAPTURES: usize = 74;
 
 const HASH_MOVE_BONUS: MoveGuessNum = MoveGuessNum::MAX;
-const QUEEN_PROMOTION_BONUS: MoveGuessNum = 50_000_000;
 const CAPTURE_BONUS: MoveGuessNum = 50_000_000;
 const KILLER_MOVE_BONUS: MoveGuessNum = 30_000_000;
-const KNIGHT_PROMOTION_BONUS: MoveGuessNum = 20_000_000;
+const QUEEN_PROMOTION_BONUS: MoveGuessNum = 20_000_000;
+const KNIGHT_PROMOTION_BONUS: MoveGuessNum = 10_000_000;
 const ROOK_PROMOTION_BONUS: MoveGuessNum = 0;
 const BISHOP_PROMOTION_BONUS: MoveGuessNum = 0;
 
