@@ -476,25 +476,18 @@ impl Search {
             } else if piece == Piece::BlackKing {
                 castling_rights.unset_black_king_side();
                 castling_rights.unset_black_queen_side();
-            } else {
-                if move_data.from == Square::from_index(0) || move_data.to == Square::from_index(0)
-                {
-                    castling_rights.unset_white_queen_side();
-                }
-                if move_data.from == Square::from_index(7) || move_data.to == Square::from_index(7)
-                {
-                    castling_rights.unset_white_king_side();
-                }
-                if move_data.from == Square::from_index(56)
-                    || move_data.to == Square::from_index(56)
-                {
-                    castling_rights.unset_black_queen_side();
-                }
-                if move_data.from == Square::from_index(63)
-                    || move_data.to == Square::from_index(63)
-                {
-                    castling_rights.unset_black_king_side();
-                }
+            }
+            if move_data.from == Square::from_index(0) || move_data.to == Square::from_index(0) {
+                castling_rights.unset_white_queen_side();
+            }
+            if move_data.from == Square::from_index(7) || move_data.to == Square::from_index(7) {
+                castling_rights.unset_white_king_side();
+            }
+            if move_data.from == Square::from_index(56) || move_data.to == Square::from_index(56) {
+                castling_rights.unset_black_queen_side();
+            }
+            if move_data.from == Square::from_index(63) || move_data.to == Square::from_index(63) {
+                castling_rights.unset_black_king_side();
             }
             self.search_state
                 .position_zobrist_key
@@ -701,32 +694,32 @@ impl Search {
         let is_not_pv_node = alpha + 1 == beta;
 
         // Get value from transposition table
-        let saved = if let Some(saved) = self.transposition_table[zobrist_index] {
+        let mut saved = None;
+        if let Some(entry) = self.transposition_table[zobrist_index] {
             // Check if it's actually the same position
-            if saved.zobrist_key_32 == zobrist_key.lower_u32() {
+            if entry.zobrist_key_32 == zobrist_key.lower_u32() {
+                let value = transposition::retrieve_mate_score(entry.value, ply_from_root);
+
                 // Check if the saved depth is as high as the depth now
-                if saved.ply_remaining >= ply_remaining {
-                    let node_type = &saved.node_type;
+                if entry.ply_remaining >= ply_remaining {
+                    let node_type = &entry.node_type;
                     if match node_type {
                         NodeType::Exact => is_not_pv_node,
-                        NodeType::Beta => saved.value >= beta,
-                        NodeType::Alpha => saved.value <= alpha,
+                        NodeType::Beta => value >= beta,
+                        NodeType::Alpha => value <= alpha,
                     } {
-                        self.pv.update_move(ply_from_root, saved.transposition_move);
+                        self.pv.update_move(ply_from_root, entry.transposition_move);
 
-                        return saved.value;
+                        return value;
                     }
                 }
 
-                hash_move = saved.transposition_move;
+                hash_move = entry.transposition_move;
 
-                Some(saved)
-            } else {
-                None
+                saved = Some((value, entry.node_type));
             }
-        } else {
-            None
-        };
+        }
+
         if ply_from_root == 0 {
             // Use iterative deepening move as hash move
             hash_move = self.pv.root_best_move();
@@ -755,16 +748,16 @@ impl Search {
 
         let static_eval = {
             let mut static_eval = self.static_evaluate();
-            if let Some(saved) = saved {
+            if let Some((saved_value, saved_node_type)) = saved {
                 // Use saved value as better static evaluation
-                if !Self::score_is_checkmate(saved.value)
-                    && match saved.node_type {
+                if !Self::score_is_checkmate(saved_value)
+                    && match saved_node_type {
                         NodeType::Exact => true,
-                        NodeType::Beta => saved.value > static_eval,
-                        NodeType::Alpha => saved.value < static_eval,
+                        NodeType::Beta => saved_value > static_eval,
+                        NodeType::Alpha => saved_value < static_eval,
                     }
                 {
-                    static_eval = saved.value;
+                    static_eval = saved_value;
                 }
             }
 
@@ -861,7 +854,7 @@ impl Search {
         let mut index = 0;
         loop {
             let encoded_move_data = unsafe {
-                // SAFETY: `put_highest_guessed_move` guarantees that `move_guesses[0..move_count]` are initialised.
+                // SAFETY: `get_move_guesses` guarantees that `move_guesses[0..move_count]` are initialised.
                 // `index` can not be higher than `move_count`, due to the loop condition.
 
                 MoveOrderer::put_highest_guessed_move(&mut move_guesses, index, move_count)
@@ -1034,6 +1027,8 @@ impl Search {
             } else {
                 if is_not_pv_node && !move_generator.is_in_check() {
                     if USE_FUTILITY_PRUNING
+                        && ply_remaining < param!(self).futility_max_depth
+                        && best_score > -CHECKMATE_SCORE // Do not prune if we might find a move to avoid getting checkmated
                         && static_eval + param!(self).futility_margin * i32::from(ply_remaining)
                             < alpha
                     {
@@ -1109,7 +1104,7 @@ impl Search {
             zobrist_key_32: zobrist_key.lower_u32(),
             ply_remaining,
             node_type,
-            value: best_score,
+            value: transposition::normalise_mate_score(best_score, ply_from_root),
             transposition_move: if best_move.is_none() {
                 hash_move
             } else {
