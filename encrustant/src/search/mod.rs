@@ -37,7 +37,7 @@ use self::{
 pub type Ply = u8;
 
 /// Score of having checkmated the opponent.
-pub const IMMEDIATE_CHECKMATE_SCORE: EvalNumber = EvalNumber::MAX - 1;
+pub const IMMEDIATE_CHECKMATE_SCORE: EvalNumber = 70000;
 
 const CHECKMATE_SCORE: EvalNumber = IMMEDIATE_CHECKMATE_SCORE - (Ply::MAX as EvalNumber);
 
@@ -1053,7 +1053,7 @@ impl Search {
             }
         }
 
-        if !move_generator.is_in_check() && !Self::score_is_checkmate(best_score) {
+        if !move_generator.is_in_check() {
             let not_loud_move = {
                 if best_move.is_none() {
                     true
