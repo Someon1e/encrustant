@@ -189,14 +189,7 @@ impl MoveGenerator {
         if rook_attacks.overlaps(&king_bit_board) {
             // This piece is checking the king
 
-            let ray = get_rook_moves(from, occupied_squares & relevant_rook_blockers(from))
-                & !king_bit_board
-                & get_rook_moves(
-                    king_square,
-                    from.bit_board() & relevant_rook_blockers(king_square),
-                );
-
-            *push_mask |= ray;
+            *push_mask |= get_between_rays(from, king_square);
         }
         rook_attacks
     }
@@ -215,14 +208,7 @@ impl MoveGenerator {
         if bishop_attacks.overlaps(&king_bit_board) {
             // This piece is checking the king
 
-            let ray = get_bishop_moves(from, occupied_squares & relevant_bishop_blockers(from))
-                & !king_bit_board
-                & get_bishop_moves(
-                    king_square,
-                    from.bit_board() & relevant_bishop_blockers(king_square),
-                );
-
-            *push_mask |= ray;
+            *push_mask |= get_between_rays(from, king_square);
         }
         bishop_attacks
     }
