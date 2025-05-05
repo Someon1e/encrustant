@@ -187,12 +187,16 @@ impl Search {
     }
 
     /// Skips the turn
-    pub const fn make_null_move(&mut self) -> ExtendedState {
+    pub fn make_null_move(&mut self) -> ExtendedState {
+        self.repetition_table.push(self.position_zobrist_key());
+
         let old_search_state = self.search_state;
         let old_game_state = self.board.game_state;
 
         self.board.white_to_move = !self.board.white_to_move;
         self.search_state.position_zobrist_key.flip_side_to_move();
+
+        self.board.game_state.half_move_clock = 0;
 
         let en_passant_square = self.board.game_state.en_passant_square;
         if let Some(en_passant_square) = en_passant_square {
@@ -209,10 +213,11 @@ impl Search {
     }
 
     /// Unskips the turn
-    pub const fn unmake_null_move(&mut self, old_state: &ExtendedState) {
+    pub fn unmake_null_move(&mut self, old_state: &ExtendedState) {
         self.search_state = old_state.search_state;
         self.board.game_state = old_state.game_state;
         self.board.white_to_move = !self.board.white_to_move;
+        assert_eq!(self.repetition_table.pop(), self.position_zobrist_key());
     }
 
     /// Sets an empty transposition table with the new capacity.
@@ -744,7 +749,10 @@ impl Search {
 
         // Check for repetition
         if ply_from_root != 0 {
-            if self.repetition_table.contains(zobrist_key) {
+            if self
+                .repetition_table
+                .contains(zobrist_key, self.board.game_state.half_move_clock)
+            {
                 return 0;
             }
             if self.board.is_insufficient_material() {
