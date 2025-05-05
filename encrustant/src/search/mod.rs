@@ -81,8 +81,8 @@ pub struct DepthSearchInfo<'a> {
     pub hash_full: u16,
 }
 
-const PAWN_CORRECTION_HISTORY_LENGTH: usize = 8192;
-const MINOR_PIECE_CORRECTION_HISTORY_LENGTH: usize = 8192;
+const PAWN_CORRECTION_HISTORY_SIZE: usize = 16384;
+const MINOR_PIECE_CORRECTION_HISTORY_SIZE: usize = 16384;
 
 /// Information used in search about the position.
 #[derive(Clone, Copy, Debug)]
@@ -117,8 +117,8 @@ pub struct Search {
     quiet_history: Box<[[i16; 64 * 64]; 2]>,
     capture_history: Box<[[[i16; 6]; 64]; 12]>, // Inner table length is 6 because outer table already gives information about the piece colour
 
-    pawn_correction_history: Box<[[i16; PAWN_CORRECTION_HISTORY_LENGTH]; 2]>,
-    minor_piece_correction_history: Box<[[i16; MINOR_PIECE_CORRECTION_HISTORY_LENGTH]; 2]>,
+    pawn_correction_history: Box<[[i16; PAWN_CORRECTION_HISTORY_SIZE]; 2]>,
+    minor_piece_correction_history: Box<[[i16; MINOR_PIECE_CORRECTION_HISTORY_SIZE]; 2]>,
 
     eval_history: [EvalNumber; 256],
 
@@ -159,10 +159,10 @@ impl Search {
             quiet_history: vec![[0; 64 * 64]; 2].try_into().unwrap(),
             capture_history: vec![[[0; 6]; 64]; 12].try_into().unwrap(),
 
-            pawn_correction_history: vec![[0; PAWN_CORRECTION_HISTORY_LENGTH]; 2]
+            pawn_correction_history: vec![[0; PAWN_CORRECTION_HISTORY_SIZE]; 2]
                 .try_into()
                 .unwrap(),
-            minor_piece_correction_history: vec![[0; MINOR_PIECE_CORRECTION_HISTORY_LENGTH]; 2]
+            minor_piece_correction_history: vec![[0; MINOR_PIECE_CORRECTION_HISTORY_SIZE]; 2]
                 .try_into()
                 .unwrap(),
 
@@ -281,10 +281,10 @@ impl Search {
     fn quiescence_search(&mut self, mut alpha: EvalNumber, beta: EvalNumber) -> EvalNumber {
         let pawn_index = self
             .pawn_zobrist_key()
-            .modulo(PAWN_CORRECTION_HISTORY_LENGTH as u64);
+            .modulo(PAWN_CORRECTION_HISTORY_SIZE as u64);
         let minor_piece_index = self
             .minor_piece_zobrist_key()
-            .modulo(MINOR_PIECE_CORRECTION_HISTORY_LENGTH as u64);
+            .modulo(MINOR_PIECE_CORRECTION_HISTORY_SIZE as u64);
 
         let mut best_score =
             self.get_correction(self.static_evaluate(), pawn_index, minor_piece_index);
@@ -809,10 +809,10 @@ impl Search {
 
         let pawn_index = self
             .pawn_zobrist_key()
-            .modulo(PAWN_CORRECTION_HISTORY_LENGTH as u64);
+            .modulo(PAWN_CORRECTION_HISTORY_SIZE as u64);
         let minor_piece_index = self
             .minor_piece_zobrist_key()
-            .modulo(MINOR_PIECE_CORRECTION_HISTORY_LENGTH as u64);
+            .modulo(MINOR_PIECE_CORRECTION_HISTORY_SIZE as u64);
 
         let static_eval = {
             let mut static_eval = self.static_evaluate();
@@ -1147,7 +1147,7 @@ impl Search {
             {
                 let error = best_score - static_eval;
 
-                Self::update_correction_history::<PAWN_CORRECTION_HISTORY_LENGTH>(
+                Self::update_correction_history::<PAWN_CORRECTION_HISTORY_SIZE>(
                     &mut self.pawn_correction_history,
                     ply_remaining,
                     self.board.white_to_move,
@@ -1156,7 +1156,7 @@ impl Search {
                     param!(self).pawn_correction_history_grain,
                 );
 
-                Self::update_correction_history::<MINOR_PIECE_CORRECTION_HISTORY_LENGTH>(
+                Self::update_correction_history::<MINOR_PIECE_CORRECTION_HISTORY_SIZE>(
                     &mut self.minor_piece_correction_history,
                     ply_remaining,
                     self.board.white_to_move,
