@@ -95,6 +95,9 @@ pub struct SearchState {
 
     /// Pawn zobrist key.
     pub pawn_zobrist_key: Zobrist,
+
+    /// Minor piece (knight, bishop, king) zobrist key.
+    pub minor_piece_zobrist_key: Zobrist,
 }
 
 /// A combination of `GameState` and `SearchState`.
@@ -143,6 +146,7 @@ impl Search {
         let (total_middle_game_score, total_end_game_score) = Eval::raw_evaluate(&board);
         let position_zobrist_key = Zobrist::compute(&board);
         let pawn_zobrist_key = Zobrist::pawn_key(&board);
+        let minor_piece_zobrist_key = Zobrist::minor_piece_key(&board);
 
         Self {
             board,
@@ -169,6 +173,7 @@ impl Search {
                 total_end_game_score,
                 position_zobrist_key,
                 pawn_zobrist_key,
+                minor_piece_zobrist_key,
             },
 
             pv: Pv::new(),
@@ -228,11 +233,13 @@ impl Search {
 
         let position_zobrist_key = Zobrist::compute(&self.board);
         let pawn_zobrist_key = Zobrist::pawn_key(&self.board);
+        let minor_piece_zobrist_key = Zobrist::minor_piece_key(&self.board);
         let (total_middle_game_score, total_end_game_score) = Eval::raw_evaluate(&self.board);
         self.search_state.total_middle_game_score = total_middle_game_score;
         self.search_state.total_end_game_score = total_end_game_score;
         self.search_state.position_zobrist_key = position_zobrist_key;
         self.search_state.pawn_zobrist_key = pawn_zobrist_key;
+        self.search_state.minor_piece_zobrist_key = minor_piece_zobrist_key;
     }
 
     /// Another search.
@@ -411,7 +418,7 @@ impl Search {
     /// Returns the current minor piece (knight, bishop, king) zobrist key
     #[must_use]
     pub fn minor_piece_zobrist_key(&self) -> Zobrist {
-        Zobrist::minor_piece_key(&self.board)
+        self.search_state.minor_piece_zobrist_key
     }
 
     #[must_use]
@@ -445,6 +452,7 @@ impl Search {
     /// Makes a move and updates the evaluation.
     pub fn make_move<const PREFETCH: bool>(&mut self, move_data: &Move) -> ExtendedState {
         debug_assert!(Zobrist::pawn_key(&self.board) == self.pawn_zobrist_key());
+        debug_assert!(Zobrist::minor_piece_key(&self.board) == self.minor_piece_zobrist_key());
         debug_assert!(Zobrist::compute(&self.board) == self.position_zobrist_key());
 
         let search_state = self.search_state;
@@ -456,10 +464,25 @@ impl Search {
         self.search_state
             .position_zobrist_key
             .xor_piece(piece as usize, move_data.from.usize());
-        if matches!(piece, Piece::WhitePawn | Piece::BlackPawn) {
-            self.search_state
-                .pawn_zobrist_key
-                .xor_piece(piece as usize, move_data.from.usize());
+        match piece {
+            Piece::WhitePawn | Piece::BlackPawn => {
+                self.search_state
+                    .pawn_zobrist_key
+                    .xor_piece(piece as usize, move_data.from.usize());
+            }
+
+            Piece::BlackKnight
+            | Piece::WhiteKnight
+            | Piece::BlackBishop
+            | Piece::WhiteBishop
+            | Piece::WhiteKing
+            | Piece::BlackKing => {
+                self.search_state
+                    .minor_piece_zobrist_key
+                    .xor_piece(piece as usize, move_data.from.usize());
+            }
+
+            _ => {}
         }
         self.evaluation_remove_piece(piece, move_data.from);
 
@@ -501,15 +524,39 @@ impl Search {
             self.search_state
                 .position_zobrist_key
                 .xor_piece(promotion_piece as usize, move_data.to.usize());
+
+            if matches!(
+                promotion_piece,
+                Piece::BlackKnight | Piece::WhiteKnight | Piece::BlackBishop | Piece::WhiteBishop
+            ) {
+                self.search_state
+                    .minor_piece_zobrist_key
+                    .xor_piece(promotion_piece as usize, move_data.to.usize())
+            }
         } else {
             self.evaluation_add_piece(piece, move_data.to);
             self.search_state
                 .position_zobrist_key
                 .xor_piece(piece as usize, move_data.to.usize());
-            if matches!(piece, Piece::WhitePawn | Piece::BlackPawn) {
-                self.search_state
-                    .pawn_zobrist_key
-                    .xor_piece(piece as usize, move_data.to.usize());
+
+            match piece {
+                Piece::WhitePawn | Piece::BlackPawn => {
+                    self.search_state
+                        .pawn_zobrist_key
+                        .xor_piece(piece as usize, move_data.to.usize());
+                }
+
+                Piece::BlackKnight
+                | Piece::WhiteKnight
+                | Piece::BlackBishop
+                | Piece::WhiteBishop
+                | Piece::WhiteKing
+                | Piece::BlackKing => self
+                    .search_state
+                    .minor_piece_zobrist_key
+                    .xor_piece(piece as usize, move_data.to.usize()),
+
+                _ => {}
             }
         }
 
@@ -537,10 +584,13 @@ impl Search {
                 } else {
                     Piece::BlackRook
                 };
+
                 let rook_from = move_data.to.offset(rook_from_offset);
                 let rook_to = move_data.to.offset(rook_to_offset);
+
                 self.evaluation_remove_piece(rook, rook_from);
                 self.evaluation_add_piece(rook, rook_to);
+
                 self.search_state
                     .position_zobrist_key
                     .xor_piece(rook as usize, rook_from.usize());
@@ -575,10 +625,26 @@ impl Search {
                     self.search_state
                         .position_zobrist_key
                         .xor_piece(captured as usize, move_data.to.usize());
-                    if matches!(captured, Piece::WhitePawn | Piece::BlackPawn) {
-                        self.search_state
-                            .pawn_zobrist_key
-                            .xor_piece(captured as usize, move_data.to.usize());
+
+                    match captured {
+                        Piece::WhitePawn | Piece::BlackPawn => {
+                            self.search_state
+                                .pawn_zobrist_key
+                                .xor_piece(captured as usize, move_data.to.usize());
+                        }
+
+                        Piece::BlackKnight
+                        | Piece::WhiteKnight
+                        | Piece::BlackBishop
+                        | Piece::WhiteBishop
+                        | Piece::WhiteKing
+                        | Piece::BlackKing => {
+                            self.search_state
+                                .minor_piece_zobrist_key
+                                .xor_piece(captured as usize, move_data.to.usize());
+                        }
+
+                        _ => {}
                     }
                 }
             }
@@ -614,6 +680,7 @@ impl Search {
         let game_state = self.board.make_move(move_data);
 
         debug_assert!(Zobrist::pawn_key(&self.board) == self.pawn_zobrist_key());
+        debug_assert!(Zobrist::minor_piece_key(&self.board) == self.minor_piece_zobrist_key());
         debug_assert!(Zobrist::compute(&self.board) == self.position_zobrist_key());
 
         ExtendedState {
@@ -650,6 +717,7 @@ impl Search {
 
         debug_assert!(Zobrist::compute(&self.board) == self.position_zobrist_key());
         debug_assert!(Zobrist::pawn_key(&self.board) == self.pawn_zobrist_key());
+        debug_assert!(Zobrist::minor_piece_key(&self.board) == self.minor_piece_zobrist_key());
     }
 
     fn negamax(
