@@ -17,6 +17,11 @@ impl Board {
             Flag::None => {
                 let piece = self.friendly_piece_at(move_data.from).unwrap();
 
+                if piece == Piece::WhitePawn || piece == Piece::BlackPawn {
+                    self.game_state.half_move_clock = 0;
+                } else {
+                    self.game_state.half_move_clock += 1;
+                }
                 if piece == Piece::WhiteKing {
                     self.game_state.castling_rights.unset_white_king_side();
                     self.game_state.castling_rights.unset_white_queen_side();
@@ -52,6 +57,8 @@ impl Board {
                     }
                     let capturing_bit_board = self.get_bit_board_mut(captured);
                     capturing_bit_board.toggle(&move_data.to);
+
+                    self.game_state.half_move_clock = 0;
                 }
             }
             Flag::PawnTwoUp => {
@@ -60,6 +67,8 @@ impl Board {
                 } else {
                     Piece::BlackPawn
                 };
+
+                self.game_state.half_move_clock = 0;
 
                 let moving_bit_board = self.get_bit_board_mut(piece);
                 moving_bit_board.toggle_two(&move_data.from, &move_data.to);
@@ -74,6 +83,8 @@ impl Board {
                 } else {
                     Piece::BlackKing
                 };
+
+                self.game_state.half_move_clock += 1;
 
                 if white_to_move {
                     self.game_state.castling_rights.unset_white_king_side();
@@ -108,6 +119,8 @@ impl Board {
                     Piece::BlackPawn
                 };
 
+                self.game_state.half_move_clock = 0;
+
                 let moving_bit_board = self.get_bit_board_mut(piece);
                 moving_bit_board.toggle_two(&move_data.from, &move_data.to);
 
@@ -137,6 +150,8 @@ impl Board {
                 } else {
                     Piece::BlackPawn
                 };
+
+                self.game_state.half_move_clock = 0;
 
                 let promotion_piece = flag.get_promotion_piece(white_to_move).unwrap();
 
