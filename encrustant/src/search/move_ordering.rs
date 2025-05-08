@@ -131,7 +131,7 @@ impl MoveOrderer {
 
     fn guess_capture_value(search: &Search, move_data: Move) -> MoveGuessNum {
         let mut score = match move_data.flag {
-            Flag::EnPassant => return 0,
+            Flag::EnPassant => return 15,
             Flag::BishopPromotion => return -1,
             Flag::RookPromotion => return -1,
 
