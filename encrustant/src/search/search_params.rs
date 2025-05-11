@@ -62,7 +62,7 @@ pub struct Tunable {
 pub(crate) const DEFAULT_TUNABLES: Tunable = Tunable {
     iir_depth_reduction: 1,
 
-    static_null_max_depth: 7,
+    static_null_max_depth: 9,
 
     lmp_base: 2,
 
