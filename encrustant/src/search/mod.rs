@@ -1111,13 +1111,17 @@ impl Search {
                         // Futility pruning
                         break;
                     }
-                    if quiets_evaluated.len() as u32 + 1
-                        > (param!(self).lmp_base
-                            + u32::from(ply_remaining) * u32::from(ply_remaining))
-                            / (2 - u32::from(improving))
+
+                    if best_score > -CHECKMATE_SCORE
+                    // Do not prune if we might find a move to avoid getting checkmated
                     {
-                        // Late move pruning
-                        break;
+                        let threshold = (param!(self).lmp_base
+                            + u32::from(ply_remaining) * u32::from(ply_remaining))
+                            / (2 - u32::from(improving));
+                        if quiets_evaluated.len() as u32 + 1 > threshold {
+                            // Late move pruning
+                            break;
+                        }
                     }
                 }
                 quiets_evaluated.push(encoded_move_data);
