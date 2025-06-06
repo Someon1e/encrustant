@@ -893,6 +893,9 @@ impl Search {
                 self.unmake_null_move(&old_state);
 
                 if score >= beta {
+                    if score >= CHECKMATE_SCORE {
+                        return beta;
+                    }
                     return score;
                 }
             }
