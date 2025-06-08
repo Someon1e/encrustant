@@ -1268,7 +1268,7 @@ impl Search {
             }
             previous_best_score = best_score;
 
-            if self.pv.root_best_move().is_none() || Self::score_is_checkmate(best_score) {
+            if self.pv.root_best_move().is_none() {
                 while time_manager.is_pondering() {}
                 // No point searching more.
 
