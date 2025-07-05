@@ -36,6 +36,7 @@
 ### Search move ordering
 - Butterfly history
 - Capture history
+- Counter move history
 - Killer move heuristic
 - MVV-LVA
 

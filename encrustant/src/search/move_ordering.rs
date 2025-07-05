@@ -1,8 +1,11 @@
 use core::mem::MaybeUninit;
 
-use crate::move_generator::{
-    MoveGenerator,
-    move_data::{Flag, Move},
+use crate::{
+    move_generator::{
+        MoveGenerator,
+        move_data::{Flag, Move},
+    },
+    search::Ply,
 };
 
 use super::{Search, encoded_move::EncodedMove};
@@ -45,7 +48,7 @@ const CAPTURING_SCORE: [i32; 12] = {
 
 pub struct MoveOrderer;
 impl MoveOrderer {
-    fn guess_move_value(search: &Search, move_data: Move) -> MoveGuessNum {
+    fn guess_move_value(search: &Search, move_data: Move, ply_from_root: Ply) -> MoveGuessNum {
         let moving_from = move_data.from;
         let moving_to = move_data.to;
 
@@ -66,13 +69,12 @@ impl MoveOrderer {
         }
 
         let mut score = 0;
+        let moving_piece = search.board.friendly_piece_at(moving_from).unwrap();
 
         // This won't consider en passant
         if let Some(capturing) = search.board.enemy_piece_at(moving_to) {
             score += CAPTURE_BONUS;
             score += MoveGuessNum::from(CAPTURING_SCORE[capturing as usize]);
-
-            let moving_piece = search.board.friendly_piece_at(moving_from).unwrap();
 
             score += i32::from(
                 search.capture_history[moving_piece as usize][moving_to.usize()][if search
@@ -89,6 +91,20 @@ impl MoveOrderer {
                 search.quiet_history[usize::from(search.board.white_to_move)]
                     [moving_from.usize() + moving_to.usize() * 64],
             );
+
+            if ply_from_root != 0 {
+                score += MoveGuessNum::from(
+                    search.continuation_history
+                        [search.continuation_indices[(ply_from_root - 1) as usize].0 as usize]
+                        [search.continuation_indices[(ply_from_root - 1) as usize]
+                            .1
+                            .usize()][if search.board.white_to_move {
+                        moving_piece as usize
+                    } else {
+                        moving_piece as usize - 6
+                    }][moving_to.usize()],
+                );
+            }
         }
         score
     }
@@ -215,6 +231,7 @@ impl MoveOrderer {
         move_generator: &MoveGenerator,
         hash_move: EncodedMove,
         killer_move: EncodedMove,
+        ply_from_root: Ply,
     ) -> ([MaybeUninit<MoveGuess>; MAX_LEGAL_MOVES], usize) {
         let mut move_guesses = [MaybeUninit::uninit(); MAX_LEGAL_MOVES];
 
@@ -228,7 +245,7 @@ impl MoveOrderer {
                 } else if encoded == killer_move {
                     KILLER_MOVE_BONUS
                 } else {
-                    Self::guess_move_value(search, move_data)
+                    Self::guess_move_value(search, move_data, ply_from_root)
                 };
 
                 move_guesses[index].write(MoveGuess {
@@ -273,6 +290,7 @@ mod tests {
             &move_generator,
             EncodedMove::NONE,
             EncodedMove::NONE,
+            0,
         );
 
         let mut index = 0;
