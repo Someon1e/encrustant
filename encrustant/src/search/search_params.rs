@@ -46,6 +46,11 @@ pub struct Tunable {
     pub capture_history_multiplier_malus: i32,
     pub capture_history_subtraction_malus: i32,
 
+    pub continuation_history_multiplier_bonus: i32,
+    pub continuation_history_subtraction_bonus: i32,
+    pub continuation_history_multiplier_malus: i32,
+    pub continuation_history_subtraction_malus: i32,
+
     pub best_move_stability_multiplier_0: u64,
     pub best_move_stability_multiplier_1: u64,
     pub best_move_stability_multiplier_2: u64,
@@ -70,6 +75,11 @@ pub(crate) const DEFAULT_TUNABLES: Tunable = Tunable {
     nmp_base_reduction: 3,
 
     futility_max_depth: 12,
+
+    continuation_history_multiplier_bonus: 300,
+    continuation_history_subtraction_bonus: 150,
+    continuation_history_multiplier_malus: 270,
+    continuation_history_subtraction_malus: 140,
 
     history_decay: 9,
     iir_min_depth: 5,
