@@ -84,6 +84,11 @@ pub struct DepthSearchInfo<'a> {
 const PAWN_CORRECTION_HISTORY_LENGTH: usize = 8192;
 const MINOR_PIECE_CORRECTION_HISTORY_LENGTH: usize = 8192;
 
+const MAX_HISTORY: i32 = 16384;
+fn history_gravity(current_value: i16, history_bonus: i32) -> i16 {
+    (history_bonus - (i32::from(current_value) * history_bonus.abs() / MAX_HISTORY)) as i16
+}
+
 /// Information used in search about the position.
 #[derive(Clone, Copy, Debug)]
 pub struct SearchState {
@@ -117,10 +122,14 @@ pub struct Search {
     quiet_history: Box<[[i16; 64 * 64]; 2]>,
     capture_history: Box<[[[i16; 6]; 64]; 12]>, // Inner table length is 6 because outer table already gives information about the piece colour
 
+    // [previous_piece][previous_to][current_piece][current_to]
+    continuation_history: Box<[[[[i16; 64]; 6]; 64]; 12]>,
+
     pawn_correction_history: Box<[[i16; PAWN_CORRECTION_HISTORY_LENGTH]; 2]>,
     minor_piece_correction_history: Box<[[i16; MINOR_PIECE_CORRECTION_HISTORY_LENGTH]; 2]>,
 
     eval_history: [EvalNumber; 256],
+    continuation_indices: [(Piece, Square); 256],
 
     killer_moves: [EncodedMove; 64],
 
@@ -159,6 +168,8 @@ impl Search {
             quiet_history: vec![[0; 64 * 64]; 2].try_into().unwrap(),
             capture_history: vec![[[0; 6]; 64]; 12].try_into().unwrap(),
 
+            continuation_history: vec![[[[0; 64]; 6]; 64]; 12].try_into().unwrap(),
+
             pawn_correction_history: vec![[0; PAWN_CORRECTION_HISTORY_LENGTH]; 2]
                 .try_into()
                 .unwrap(),
@@ -175,6 +186,9 @@ impl Search {
                 pawn_zobrist_key,
                 minor_piece_zobrist_key,
             },
+
+            // Placeholder values
+            continuation_indices: [(Piece::WhitePawn, Square::from_index(0)); 256],
 
             pv: Pv::new(),
             highest_depth: 0,
@@ -269,6 +283,14 @@ impl Search {
         self.pawn_correction_history[1].fill(0);
         self.minor_piece_correction_history[0].fill(0);
         self.minor_piece_correction_history[1].fill(0);
+
+        for x in self.continuation_history.iter_mut() {
+            for y in x {
+                for z in y {
+                    z.fill(0);
+                }
+            }
+        }
 
         for x in self.capture_history.iter_mut() {
             for y in x.iter_mut() {
@@ -725,6 +747,25 @@ impl Search {
         debug_assert!(Zobrist::minor_piece_key(&self.board) == self.minor_piece_zobrist_key());
     }
 
+    fn update_continuation_history(
+        &mut self,
+        ply_from_root: Ply,
+        current_piece: Piece,
+        current_to: Square,
+        bonus: i32,
+    ) {
+        let entry = &mut self.continuation_history
+            [self.continuation_indices[(ply_from_root - 1) as usize].0 as usize][self
+            .continuation_indices[(ply_from_root - 1) as usize]
+            .1
+            .usize()][if self.board.white_to_move {
+            current_piece as usize
+        } else {
+            current_piece as usize - 6
+        }][current_to.usize()];
+        *entry += history_gravity(*entry, bonus);
+    }
+
     fn negamax(
         &mut self,
 
@@ -878,6 +919,8 @@ impl Search {
                 != move_generator.friendly_pieces().count()
             {
                 let old_state = self.make_null_move();
+                self.continuation_indices[ply_from_root as usize] =
+                    (Piece::WhitePawn, Square::from_index(0));
 
                 let score = -self.negamax(
                     time_manager,
@@ -911,6 +954,7 @@ impl Search {
             } else {
                 EncodedMove::NONE
             },
+            ply_from_root,
         );
 
         if move_count == 0 {
@@ -944,7 +988,12 @@ impl Search {
             // This won't consider en passant
             let is_capture = move_generator.enemy_piece_bit_board().get(&move_data.to);
 
+            let moving_piece = self.board.friendly_piece_at(move_data.from).unwrap();
+
             let old_state = self.make_move_repetition::<true>(&move_data);
+
+            self.continuation_indices[ply_from_root as usize] = (moving_piece, move_data.to);
+
             self.node_count += 1;
 
             // Search deeper when in check
@@ -1036,13 +1085,6 @@ impl Search {
                             }]
                         }
 
-                        const MAX_HISTORY: i32 = 16384;
-                        fn history_gravity(current_value: i16, history_bonus: i32) -> i16 {
-                            (history_bonus
-                                - (i32::from(current_value) * history_bonus.abs() / MAX_HISTORY))
-                                as i16
-                        }
-
                         if is_capture {
                             let history_bonus = (param!(self).capture_history_multiplier_bonus
                                 * i32::from(ply_remaining)
@@ -1057,16 +1099,28 @@ impl Search {
                                 self.killer_moves[usize::from(ply_from_root)] = encoded_move_data;
                             }
 
+                            if ply_from_root != 0 {
+                                let continuation_history_bonus = (param!(self)
+                                    .continuation_history_multiplier_bonus
+                                    * i32::from(ply_remaining)
+                                    - param!(self).continuation_history_subtraction_bonus)
+                                    .min(MAX_HISTORY);
+                                self.update_continuation_history(
+                                    ply_from_root,
+                                    moving_piece,
+                                    move_data.to,
+                                    continuation_history_bonus,
+                                );
+                            }
+
                             let history_bonus = (param!(self).quiet_history_multiplier_bonus
                                 * i32::from(ply_remaining)
                                 - param!(self).quiet_history_subtraction_bonus)
                                 .min(MAX_HISTORY);
 
-                            let history_side =
-                                &mut self.quiet_history[usize::from(self.board.white_to_move)];
-
-                            let history =
-                                &mut history_side[encoded_move_data.without_flag() as usize];
+                            let history = &mut self.quiet_history
+                                [usize::from(self.board.white_to_move)]
+                                [encoded_move_data.without_flag() as usize];
                             *history += history_gravity(*history, history_bonus);
 
                             let quiet_history_malus = -(param!(self)
@@ -1074,9 +1128,28 @@ impl Search {
                                 * i32::from(ply_remaining)
                                 - param!(self).quiet_history_subtraction_malus)
                                 .min(MAX_HISTORY);
+
+                            let continuation_history_malus = -(param!(self)
+                                .continuation_history_multiplier_malus
+                                * i32::from(ply_remaining)
+                                - param!(self).continuation_history_subtraction_malus)
+                                .min(MAX_HISTORY);
+
                             for previous_quiet in quiets_evaluated {
-                                let history =
-                                    &mut history_side[previous_quiet.without_flag() as usize];
+                                if ply_from_root != 0 {
+                                    self.update_continuation_history(
+                                        ply_from_root,
+                                        self.board
+                                            .friendly_piece_at(previous_quiet.from())
+                                            .unwrap(),
+                                        previous_quiet.to(),
+                                        continuation_history_malus,
+                                    );
+                                }
+
+                                let history = &mut self.quiet_history
+                                    [usize::from(self.board.white_to_move)]
+                                    [previous_quiet.without_flag() as usize];
                                 *history += history_gravity(*history, quiet_history_malus);
                             }
                         }
