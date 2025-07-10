@@ -62,7 +62,7 @@ fn out(output: &mut String, best_magics: &[u64; 64], offsets: &[u32; 64]) {
         let mut magic_hex_underscores =
             String::with_capacity(magic_hex.len() + magic_hex.len() / 2);
         for (i, character) in magic_hex.chars().enumerate() {
-            if i != 2 && (i + 2) % 4 == 0 {
+            if i != 2 && (i + 2).is_multiple_of(4) {
                 magic_hex_underscores.push('_');
             }
             magic_hex_underscores.push(character);
@@ -244,14 +244,14 @@ fn main() {
                         out(&mut output, &bishop_magics, &bishop_offsets);
                         output.push_str("\n----------\n");
                         out(&mut output, &rook_magics, &rook_offsets);
-                        println!("{output}\nNew best length found: {}", max_offset);
+                        println!("{output}\nNew best length found: {max_offset}");
                     }
                 }
             })
         })
         .collect();
 
-    for handle in handles {
+    if let Some(handle) = handles.into_iter().next() {
         handle.join().unwrap();
     }
 }

@@ -140,6 +140,7 @@ impl MoveGenerator {
 }
 
 impl MoveGenerator {
+    #[must_use]
     pub fn calculate_checkers(
         white_to_move: bool,
         king_square: Square,
@@ -213,6 +214,7 @@ impl MoveGenerator {
         bishop_attacks
     }
 
+    #[must_use]
     pub const fn king_attack_bit_board(square: Square) -> BitBoard {
         KING_MOVES_AT_SQUARE[square.usize()]
     }

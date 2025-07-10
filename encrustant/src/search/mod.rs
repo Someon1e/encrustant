@@ -444,7 +444,7 @@ impl Search {
 
     /// Returns the current minor piece (knight, bishop, king) zobrist key
     #[must_use]
-    pub fn minor_piece_zobrist_key(&self) -> Zobrist {
+    pub const fn minor_piece_zobrist_key(&self) -> Zobrist {
         self.search_state.minor_piece_zobrist_key
     }
 
@@ -558,7 +558,7 @@ impl Search {
             ) {
                 self.search_state
                     .minor_piece_zobrist_key
-                    .xor_piece(promotion_piece as usize, move_data.to.usize())
+                    .xor_piece(promotion_piece as usize, move_data.to.usize());
             }
         } else {
             self.evaluation_add_piece(piece, move_data.to);
@@ -1298,7 +1298,7 @@ impl Search {
                     // -EvalNumber::MAX = -2147483647
                     // EvalNumber::MIN = -2147483648
 
-                    beta = ((i64::from(alpha) + i64::from(beta)) / 2) as i32;
+                    beta = i64::midpoint(i64::from(alpha), i64::from(beta)) as i32;
                 } else if best_score >= beta {
                     beta = beta.saturating_add(param!(self).aspiration_window_growth);
                 } else {

@@ -297,7 +297,7 @@ pub const PHASE_WEIGHTS: [i32; 5] = {:?};",
         }
 
         let error = mean_square_error(data_set, k, &parameters, &phase_weights);
-        println!("Iteration {}: MSE = {}", iteration, error);
+        println!("Iteration {iteration}: MSE = {error}");
 
         if error < previous_error && last_update.elapsed().as_millis() > 500 {
             log_params(&parameters, &phase_weights);

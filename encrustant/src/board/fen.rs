@@ -108,13 +108,13 @@ impl Board {
                         if white_king_square.is_some() {
                             return Err(FenParseErr::MultipleKings);
                         }
-                        white_king_square = Some(square)
+                        white_king_square = Some(square);
                     }
                     Piece::BlackKing => {
                         if black_king_square.is_some() {
                             return Err(FenParseErr::MultipleKings);
                         }
-                        black_king_square = Some(square)
+                        black_king_square = Some(square);
                     }
                     Piece::WhitePawn => {
                         if BitBoard::RANK_8.get(&square) {
