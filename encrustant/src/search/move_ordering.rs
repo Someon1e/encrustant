@@ -1,6 +1,7 @@
 use core::mem::MaybeUninit;
 
 use crate::{
+    evaluation::eval_data::EvalNumber,
     move_generator::{
         MoveGenerator,
         move_data::{Flag, Move},
@@ -9,6 +10,59 @@ use crate::{
 };
 
 use super::{Search, encoded_move::EncodedMove};
+
+#[derive(Clone, Copy, Debug)]
+pub struct CorrectionHistoryEntry(pub i16);
+
+impl CorrectionHistoryEntry {
+    const CORRECTION_HISTORY_WEIGHT_SCALE: i16 = 1024;
+    const CORRECTION_HISTORY_MAX: i16 = 16384;
+
+    pub fn update(&mut self, ply_remaining: Ply, scaled_error: EvalNumber) {
+        let new_weight = i32::min(
+            i32::from(ply_remaining) * i32::from(ply_remaining) + 2 * i32::from(ply_remaining) + 1,
+            128,
+        );
+        assert!(new_weight <= i32::from(Self::CORRECTION_HISTORY_WEIGHT_SCALE));
+
+        let new_value = (i32::from(self.0)
+            * (i32::from(Self::CORRECTION_HISTORY_WEIGHT_SCALE) - new_weight)
+            + scaled_error * new_weight)
+            / i32::from(Self::CORRECTION_HISTORY_WEIGHT_SCALE);
+        let clamped = i32::clamp(
+            new_value,
+            i32::from(-Self::CORRECTION_HISTORY_MAX),
+            i32::from(Self::CORRECTION_HISTORY_MAX),
+        );
+
+        *self = Self(clamped as i16);
+    }
+}
+
+pub struct CorrectionHistory<const LEN: usize>([[CorrectionHistoryEntry; LEN]; 2]);
+
+impl<const LEN: usize> CorrectionHistory<LEN> {
+    pub fn new() -> Self {
+        Self(
+            vec![[CorrectionHistoryEntry(0); LEN]; 2]
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    pub fn get(&self, white_to_move: bool, index: usize) -> CorrectionHistoryEntry {
+        self.0[usize::from(white_to_move)][index]
+    }
+
+    pub fn get_mut(&mut self, white_to_move: bool, index: usize) -> &mut CorrectionHistoryEntry {
+        &mut self.0[usize::from(white_to_move)][index]
+    }
+
+    pub fn fill(&mut self, value: i16) {
+        self.0[0].fill(CorrectionHistoryEntry(value));
+        self.0[1].fill(CorrectionHistoryEntry(value));
+    }
+}
 
 pub type MoveGuessNum = i32;
 

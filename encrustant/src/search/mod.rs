@@ -25,6 +25,7 @@ use crate::{
         MoveGenerator,
         move_data::{Flag, Move},
     },
+    search::move_ordering::CorrectionHistory,
 };
 
 use self::{
@@ -125,8 +126,8 @@ pub struct Search {
     // [previous_piece][previous_to][current_piece][current_to]
     continuation_history: Box<[[[[i16; 64]; 6]; 64]; 12]>,
 
-    pawn_correction_history: Box<[[i16; PAWN_CORRECTION_HISTORY_LENGTH]; 2]>,
-    minor_piece_correction_history: Box<[[i16; MINOR_PIECE_CORRECTION_HISTORY_LENGTH]; 2]>,
+    pawn_correction_history: CorrectionHistory<PAWN_CORRECTION_HISTORY_LENGTH>,
+    minor_piece_correction_history: CorrectionHistory<MINOR_PIECE_CORRECTION_HISTORY_LENGTH>,
 
     eval_history: [EvalNumber; 256],
     continuation_indices: [(Piece, Square); 256],
@@ -170,12 +171,8 @@ impl Search {
 
             continuation_history: vec![[[[0; 64]; 6]; 64]; 12].try_into().unwrap(),
 
-            pawn_correction_history: vec![[0; PAWN_CORRECTION_HISTORY_LENGTH]; 2]
-                .try_into()
-                .unwrap(),
-            minor_piece_correction_history: vec![[0; MINOR_PIECE_CORRECTION_HISTORY_LENGTH]; 2]
-                .try_into()
-                .unwrap(),
+            pawn_correction_history: CorrectionHistory::new(),
+            minor_piece_correction_history: CorrectionHistory::new(),
 
             eval_history: [0; 256],
 
@@ -279,10 +276,8 @@ impl Search {
 
     /// A new match.
     pub fn clear_cache_for_new_game(&mut self) {
-        self.pawn_correction_history[0].fill(0);
-        self.pawn_correction_history[1].fill(0);
-        self.minor_piece_correction_history[0].fill(0);
-        self.minor_piece_correction_history[1].fill(0);
+        self.pawn_correction_history.fill(0);
+        self.minor_piece_correction_history.fill(0);
 
         for x in self.continuation_history.iter_mut() {
             for y in x {
@@ -1235,23 +1230,19 @@ impl Search {
             {
                 let error = best_score - static_eval;
 
-                Self::update_correction_history::<PAWN_CORRECTION_HISTORY_LENGTH>(
-                    &mut self.pawn_correction_history,
-                    ply_remaining,
-                    self.board.white_to_move,
-                    pawn_index,
-                    error,
-                    param!(self).pawn_correction_history_grain,
-                );
+                self.pawn_correction_history
+                    .get_mut(self.board.white_to_move, pawn_index as usize)
+                    .update(
+                        ply_remaining,
+                        error * EvalNumber::from(param!(self).pawn_correction_history_grain),
+                    );
 
-                Self::update_correction_history::<MINOR_PIECE_CORRECTION_HISTORY_LENGTH>(
-                    &mut self.minor_piece_correction_history,
-                    ply_remaining,
-                    self.board.white_to_move,
-                    minor_piece_index,
-                    error,
-                    param!(self).minor_piece_correction_history_grain,
-                );
+                self.minor_piece_correction_history
+                    .get_mut(self.board.white_to_move, minor_piece_index as usize)
+                    .update(
+                        ply_remaining,
+                        error * EvalNumber::from(param!(self).minor_piece_correction_history_grain),
+                    );
             }
         }
 
@@ -1408,12 +1399,16 @@ impl Search {
         pawn_index: u64,
         minor_piece_index: u64,
     ) -> EvalNumber {
-        let pawn_correction = self.pawn_correction_history[usize::from(self.board.white_to_move)]
-            [pawn_index as usize]
+        let pawn_correction = self
+            .pawn_correction_history
+            .get(self.board.white_to_move, pawn_index as usize)
+            .0
             / param!(self).pawn_correction_history_grain;
 
-        let minor_piece_correction = self.minor_piece_correction_history
-            [usize::from(self.board.white_to_move)][minor_piece_index as usize]
+        let minor_piece_correction = self
+            .minor_piece_correction_history
+            .get(self.board.white_to_move, minor_piece_index as usize)
+            .0
             / param!(self).minor_piece_correction_history_grain;
 
         let correction = ((i32::from(pawn_correction)
@@ -1422,37 +1417,6 @@ impl Search {
                 * param!(self).minor_piece_correction_history_weight))
             / 1024;
         evaluation + correction
-    }
-
-    fn update_correction_history<const CORRECTION_HISTORY_LENGTH: usize>(
-        correction_history: &mut [[i16; CORRECTION_HISTORY_LENGTH]; 2],
-        ply_remaining: Ply,
-        white_to_move: bool,
-        index: u64,
-        error: EvalNumber,
-        grain: i16,
-    ) {
-        const CORRECTION_HISTORY_WEIGHT_SCALE: i16 = 1024;
-        const CORRECTION_HISTORY_MAX: i16 = 16384;
-
-        let mut entry = i32::from(correction_history[usize::from(white_to_move)][index as usize]);
-        let scaled_error = error * i32::from(grain);
-        let new_weight = i32::min(
-            i32::from(ply_remaining) * i32::from(ply_remaining) + 2 * i32::from(ply_remaining) + 1,
-            128,
-        );
-        assert!(new_weight <= i32::from(CORRECTION_HISTORY_WEIGHT_SCALE));
-
-        entry = (entry * (i32::from(CORRECTION_HISTORY_WEIGHT_SCALE) - new_weight)
-            + scaled_error * new_weight)
-            / i32::from(CORRECTION_HISTORY_WEIGHT_SCALE);
-        entry = i32::clamp(
-            entry,
-            i32::from(-CORRECTION_HISTORY_MAX),
-            i32::from(CORRECTION_HISTORY_MAX),
-        );
-
-        correction_history[usize::from(white_to_move)][index as usize] = entry as i16;
     }
 
     #[must_use]
