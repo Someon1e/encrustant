@@ -25,7 +25,7 @@ use crate::{
         MoveGenerator,
         move_data::{Flag, Move},
     },
-    search::move_ordering::CorrectionHistory,
+    search::move_ordering::{ContinuationHistory, CorrectionHistory},
 };
 
 use self::{
@@ -123,14 +123,13 @@ pub struct Search {
     quiet_history: Box<[[i16; 64 * 64]; 2]>,
     capture_history: Box<[[[i16; 6]; 64]; 12]>, // Inner table length is 6 because outer table already gives information about the piece colour
 
-    // [previous_piece][previous_to][current_piece][current_to]
-    continuation_history: Box<[[[[i16; 64]; 6]; 64]; 12]>,
+    continuation_history: ContinuationHistory,
+    continuation_indices: [(Piece, Square); 256],
 
     pawn_correction_history: CorrectionHistory<PAWN_CORRECTION_HISTORY_LENGTH>,
     minor_piece_correction_history: CorrectionHistory<MINOR_PIECE_CORRECTION_HISTORY_LENGTH>,
 
     eval_history: [EvalNumber; 256],
-    continuation_indices: [(Piece, Square); 256],
 
     killer_moves: [EncodedMove; 64],
 
@@ -169,7 +168,10 @@ impl Search {
             quiet_history: vec![[0; 64 * 64]; 2].try_into().unwrap(),
             capture_history: vec![[[0; 6]; 64]; 12].try_into().unwrap(),
 
-            continuation_history: vec![[[[0; 64]; 6]; 64]; 12].try_into().unwrap(),
+            continuation_history: ContinuationHistory::new(),
+
+            // Placeholder values
+            continuation_indices: [(Piece::WhitePawn, Square::from_index(0)); 256],
 
             pawn_correction_history: CorrectionHistory::new(),
             minor_piece_correction_history: CorrectionHistory::new(),
@@ -183,9 +185,6 @@ impl Search {
                 pawn_zobrist_key,
                 minor_piece_zobrist_key,
             },
-
-            // Placeholder values
-            continuation_indices: [(Piece::WhitePawn, Square::from_index(0)); 256],
 
             pv: Pv::new(),
             highest_depth: 0,
@@ -279,13 +278,7 @@ impl Search {
         self.pawn_correction_history.fill(0);
         self.minor_piece_correction_history.fill(0);
 
-        for x in self.continuation_history.iter_mut() {
-            for y in x {
-                for z in y {
-                    z.fill(0);
-                }
-            }
-        }
+        self.continuation_history.fill(0);
 
         for x in self.capture_history.iter_mut() {
             for y in x.iter_mut() {
@@ -749,15 +742,20 @@ impl Search {
         current_to: Square,
         bonus: i32,
     ) {
-        let entry = &mut self.continuation_history
-            [self.continuation_indices[(ply_from_root - 1) as usize].0 as usize][self
-            .continuation_indices[(ply_from_root - 1) as usize]
+        let previous_to = self.continuation_indices[(ply_from_root - 1) as usize]
             .1
-            .usize()][if self.board.white_to_move {
-            current_piece as usize
-        } else {
-            current_piece as usize - 6
-        }][current_to.usize()];
+            .usize();
+        let previous_piece = self.continuation_indices[(ply_from_root - 1) as usize].0 as usize;
+        let entry = self.continuation_history.get_mut(
+            previous_piece,
+            previous_to,
+            if self.board.white_to_move {
+                current_piece as usize
+            } else {
+                current_piece as usize - 6
+            },
+            current_to.usize(),
+        );
         *entry += history_gravity(*entry, bonus);
     }
 

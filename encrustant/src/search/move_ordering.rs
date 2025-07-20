@@ -11,6 +11,46 @@ use crate::{
 
 use super::{Search, encoded_move::EncodedMove};
 
+pub struct ContinuationHistory(
+    // [previous_piece][previous_to][current_piece][current_to]
+    Box<[[[[i16; 64]; 6]; 64]; 12]>,
+);
+impl ContinuationHistory {
+    pub fn new() -> Self {
+        Self(vec![[[[0; 64]; 6]; 64]; 12].try_into().unwrap())
+    }
+
+    pub fn fill(&mut self, value: i16) {
+        for x in self.0.iter_mut() {
+            for y in x {
+                for z in y {
+                    z.fill(value);
+                }
+            }
+        }
+    }
+
+    pub fn get(
+        &self,
+        previous_piece: usize,
+        previous_to: usize,
+        current_piece: usize,
+        current_to: usize,
+    ) -> i16 {
+        self.0[previous_piece][previous_to][current_piece][current_to]
+    }
+
+    pub fn get_mut(
+        &mut self,
+        previous_piece: usize,
+        previous_to: usize,
+        current_piece: usize,
+        current_to: usize,
+    ) -> &mut i16 {
+        &mut self.0[previous_piece][previous_to][current_piece][current_to]
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct CorrectionHistoryEntry(pub i16);
 
@@ -147,17 +187,22 @@ impl MoveOrderer {
             );
 
             if ply_from_root != 0 {
-                score += MoveGuessNum::from(
-                    search.continuation_history
-                        [search.continuation_indices[(ply_from_root - 1) as usize].0 as usize]
-                        [search.continuation_indices[(ply_from_root - 1) as usize]
-                            .1
-                            .usize()][if search.board.white_to_move {
+                let previous_to = search.continuation_indices[(ply_from_root - 1) as usize]
+                    .1
+                    .usize();
+                let previous_piece =
+                    search.continuation_indices[(ply_from_root - 1) as usize].0 as usize;
+
+                score += MoveGuessNum::from(search.continuation_history.get(
+                    previous_piece,
+                    previous_to,
+                    if search.board.white_to_move {
                         moving_piece as usize
                     } else {
                         moving_piece as usize - 6
-                    }][moving_to.usize()],
-                );
+                    },
+                    moving_to.usize(),
+                ));
             }
         }
         score
