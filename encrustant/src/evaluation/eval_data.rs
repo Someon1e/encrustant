@@ -1,7 +1,7 @@
 //! Data used by evaluation.
 
 /// Number type of the evaluation score.
-pub type EvalNumber = i32;
+pub type Score = i32;
 
 /// Table containing the value of each piece for every square on the board.
 pub type PieceSquareTable = [(i16, i16); 384];

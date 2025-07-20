@@ -1,7 +1,7 @@
 use core::mem::MaybeUninit;
 
 use crate::{
-    evaluation::eval_data::EvalNumber,
+    evaluation::eval_data::Score,
     move_generator::{
         MoveGenerator,
         move_data::{Flag, Move},
@@ -58,7 +58,7 @@ impl CorrectionHistoryEntry {
     const CORRECTION_HISTORY_WEIGHT_SCALE: i16 = 1024;
     const CORRECTION_HISTORY_MAX: i16 = 16384;
 
-    pub fn update(&mut self, ply_remaining: Ply, scaled_error: EvalNumber) {
+    pub fn update(&mut self, ply_remaining: Ply, scaled_error: Score) {
         let new_weight = i32::min(
             i32::from(ply_remaining) * i32::from(ply_remaining) + 2 * i32::from(ply_remaining) + 1,
             128,

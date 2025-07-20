@@ -19,7 +19,7 @@ use crate::{
     board::{Board, game_state::GameState, piece::Piece, square::Square},
     evaluation::{
         Eval,
-        eval_data::{self, EvalNumber},
+        eval_data::{self, Score},
     },
     move_generator::{
         MoveGenerator,
@@ -38,9 +38,9 @@ use self::{
 pub type Ply = u8;
 
 /// Score of having checkmated the opponent.
-pub const IMMEDIATE_CHECKMATE_SCORE: EvalNumber = 70000;
+pub const IMMEDIATE_CHECKMATE_SCORE: Score = 70000;
 
-const CHECKMATE_SCORE: EvalNumber = IMMEDIATE_CHECKMATE_SCORE - (Ply::MAX as EvalNumber);
+const CHECKMATE_SCORE: Score = IMMEDIATE_CHECKMATE_SCORE - (Ply::MAX as Score);
 
 const USE_STATIC_NULL_MOVE_PRUNING: bool = true;
 const USE_NULL_MOVE_PRUNING: bool = true;
@@ -74,7 +74,7 @@ pub struct DepthSearchInfo<'a> {
     pub highest_depth: Ply,
 
     /// The best move and evaluation.
-    pub best: (&'a Pv, EvalNumber),
+    pub best: (&'a Pv, Score),
 
     /// How many times `make_move` was called in search
     pub node_count: u64,
@@ -93,8 +93,8 @@ fn history_gravity(current_value: i16, history_bonus: i32) -> i16 {
 /// Information used in search about the position.
 #[derive(Clone, Copy, Debug)]
 pub struct SearchState {
-    total_middle_game_score: EvalNumber,
-    total_end_game_score: EvalNumber,
+    total_middle_game_score: Score,
+    total_end_game_score: Score,
 
     /// Position zobrist key.
     pub position_zobrist_key: Zobrist,
@@ -129,7 +129,7 @@ pub struct Search {
     pawn_correction_history: CorrectionHistory<PAWN_CORRECTION_HISTORY_LENGTH>,
     minor_piece_correction_history: CorrectionHistory<MINOR_PIECE_CORRECTION_HISTORY_LENGTH>,
 
-    eval_history: [EvalNumber; 256],
+    eval_history: [Score; 256],
 
     killer_moves: [EncodedMove; 64],
 
@@ -293,7 +293,7 @@ impl Search {
     }
 
     #[must_use]
-    fn quiescence_search(&mut self, mut alpha: EvalNumber, beta: EvalNumber) -> EvalNumber {
+    fn quiescence_search(&mut self, mut alpha: Score, beta: Score) -> Score {
         let pawn_index = self
             .pawn_zobrist_key()
             .modulo(PAWN_CORRECTION_HISTORY_LENGTH as u64);
@@ -437,7 +437,7 @@ impl Search {
     }
 
     #[must_use]
-    pub fn static_evaluate(&self) -> EvalNumber {
+    pub fn static_evaluate(&self) -> Score {
         let phases = eval_data::PHASE_WEIGHTS;
         #[rustfmt::skip]
         let total_phase = {
@@ -769,9 +769,9 @@ impl Search {
 
         allow_null_move: bool,
 
-        mut alpha: EvalNumber,
-        beta: EvalNumber,
-    ) -> EvalNumber {
+        mut alpha: Score,
+        beta: Score,
+    ) -> Score {
         if ply_from_root > self.highest_depth {
             self.highest_depth = ply_from_root;
         }
@@ -954,7 +954,7 @@ impl Search {
             // No moves
             let score = if move_generator.is_in_check() {
                 // Checkmate
-                -IMMEDIATE_CHECKMATE_SCORE + EvalNumber::from(ply_from_root)
+                -IMMEDIATE_CHECKMATE_SCORE + Score::from(ply_from_root)
             } else {
                 // Stalemate
                 0
@@ -963,7 +963,7 @@ impl Search {
         }
 
         let mut node_type = NodeType::Alpha;
-        let (mut best_move, mut best_score) = (EncodedMove::NONE, -EvalNumber::MAX);
+        let (mut best_move, mut best_score) = (EncodedMove::NONE, -Score::MAX);
 
         let mut quiets_evaluated: Vec<EncodedMove> = Vec::new();
         let mut captures_evaluated: Vec<EncodedMove> = Vec::new();
@@ -1232,14 +1232,14 @@ impl Search {
                     .get_mut(self.board.white_to_move, pawn_index as usize)
                     .update(
                         ply_remaining,
-                        error * EvalNumber::from(param!(self).pawn_correction_history_grain),
+                        error * Score::from(param!(self).pawn_correction_history_grain),
                     );
 
                 self.minor_piece_correction_history
                     .get_mut(self.board.white_to_move, minor_piece_index as usize)
                     .update(
                         ply_remaining,
-                        error * EvalNumber::from(param!(self).minor_piece_correction_history_grain),
+                        error * Score::from(param!(self).minor_piece_correction_history_grain),
                     );
             }
         }
@@ -1262,7 +1262,7 @@ impl Search {
 
     /// Returns whether a score means forced checkmate.
     #[must_use]
-    pub const fn score_is_checkmate(score: EvalNumber) -> bool {
+    pub const fn score_is_checkmate(score: Score) -> bool {
         score.abs() >= CHECKMATE_SCORE
     }
 
@@ -1270,22 +1270,22 @@ impl Search {
     fn aspiration_search(
         &mut self,
         time_manager: &TimeManager,
-        mut best_score: EvalNumber,
+        mut best_score: Score,
         depth: Ply,
-    ) -> EvalNumber {
+    ) -> Score {
         if USE_ASPIRATION_WINDOWS && depth > 2 {
             let mut alpha = best_score
                 .saturating_sub(param!(self).aspiration_window_start)
-                .max(-EvalNumber::MAX);
+                .max(-Score::MAX);
             let mut beta = best_score.saturating_add(param!(self).aspiration_window_start);
             for _ in 0..param!(self).aspiration_window_count {
                 best_score = self.negamax(time_manager, depth, 0, false, alpha, beta);
                 if best_score <= alpha {
                     alpha = alpha
                         .saturating_sub(param!(self).aspiration_window_growth)
-                        .max(-EvalNumber::MAX);
-                    // -EvalNumber::MAX = -2147483647
-                    // EvalNumber::MIN = -2147483648
+                        .max(-Score::MAX);
+                    // -Score::MAX = -2147483647
+                    // Score::MIN = -2147483648
 
                     beta = i64::midpoint(i64::from(alpha), i64::from(beta)) as i32;
                 } else if best_score >= beta {
@@ -1295,14 +1295,7 @@ impl Search {
                 }
             }
         }
-        self.negamax(
-            time_manager,
-            depth,
-            0,
-            false,
-            -EvalNumber::MAX,
-            EvalNumber::MAX,
-        )
+        self.negamax(time_manager, depth, 0, false, -Score::MAX, Score::MAX)
     }
 
     /// Repeatedly searches the board, increasing depth by one each time. Stops when `time_manager` returns `true`.
@@ -1313,9 +1306,9 @@ impl Search {
         time_manager: &TimeManager,
 
         depth_completed: &mut dyn FnMut(DepthSearchInfo),
-    ) -> (Ply, EvalNumber) {
+    ) -> (Ply, Score) {
         let mut depth = 0;
-        let mut previous_best_score = -EvalNumber::MAX;
+        let mut previous_best_score = -Score::MAX;
 
         let mut best_move_stability = 0;
         let mut previous_best_move = EncodedMove::NONE;
@@ -1391,12 +1384,7 @@ impl Search {
     }
 
     #[must_use]
-    fn get_correction(
-        &self,
-        evaluation: EvalNumber,
-        pawn_index: u64,
-        minor_piece_index: u64,
-    ) -> EvalNumber {
+    fn get_correction(&self, evaluation: Score, pawn_index: u64, minor_piece_index: u64) -> Score {
         let pawn_correction = self
             .pawn_correction_history
             .get(self.board.white_to_move, pawn_index as usize)
@@ -1435,7 +1423,7 @@ impl Search {
 mod tests {
     use crate::{
         board::Board,
-        evaluation::{Eval, eval_data::EvalNumber},
+        evaluation::{Eval, eval_data::Score},
         search::{Search, transposition::megabytes_to_capacity},
     };
 
@@ -1454,7 +1442,7 @@ mod tests {
                 #[cfg(feature = "spsa")]
                 crate::search::search_params::DEFAULT_TUNABLES,
             )
-            .quiescence_search(-EvalNumber::MAX, EvalNumber::MAX),
+            .quiescence_search(-Score::MAX, Score::MAX),
             Eval::evaluate(&quiet)
         );
     }
