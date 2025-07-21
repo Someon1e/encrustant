@@ -17,12 +17,16 @@ pub enum FenParseErr {
     /// An invalid piece character was encountered in the position section of the FEN string.
     InvalidPiece,
 
+    /// A king or both kings are missing.
     MissingKing,
 
+    /// There are more than 2 kings.
     MultipleKings,
 
+    /// The kings are adjacent.
     TouchingKings,
 
+    /// There is a pawn on the rank where it should have promoted.
     PawnOnPromotionRank,
 
     /// An invalid digit was encountered in the position section (e.g., a number greater than 8 or incorrect rank structure).
