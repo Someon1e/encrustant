@@ -63,36 +63,22 @@ impl Flag {
     /// ```
     #[must_use]
     pub const fn get_promotion_piece(&self, white: bool) -> Option<Piece> {
-        match self {
-            Self::QueenPromotion => Some({
-                if white {
-                    Piece::WhiteQueen
-                } else {
-                    Piece::BlackQueen
-                }
-            }),
-            Self::RookPromotion => Some({
-                if white {
-                    Piece::WhiteRook
-                } else {
-                    Piece::BlackRook
-                }
-            }),
-            Self::BishopPromotion => Some({
-                if white {
-                    Piece::WhiteBishop
-                } else {
-                    Piece::BlackBishop
-                }
-            }),
-            Self::KnightPromotion => Some({
-                if white {
-                    Piece::WhiteKnight
-                } else {
-                    Piece::BlackKnight
-                }
-            }),
-            _ => None,
+        if white {
+            match self {
+                Self::QueenPromotion => Some(Piece::WhiteQueen),
+                Self::RookPromotion => Some(Piece::WhiteRook),
+                Self::BishopPromotion => Some(Piece::WhiteBishop),
+                Self::KnightPromotion => Some(Piece::WhiteKnight),
+                _ => None,
+            }
+        } else {
+            match self {
+                Self::QueenPromotion => Some(Piece::BlackQueen),
+                Self::RookPromotion => Some(Piece::BlackRook),
+                Self::BishopPromotion => Some(Piece::BlackBishop),
+                Self::KnightPromotion => Some(Piece::BlackKnight),
+                _ => None,
+            }
         }
     }
 }

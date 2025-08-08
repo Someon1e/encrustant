@@ -6,7 +6,7 @@ use crate::{
 };
 
 pub mod eval_data;
-use eval_data::{EvalNumber, PieceSquareTable};
+use eval_data::{PieceSquareTable, Score};
 
 /// Evaluation functions.
 pub struct Eval;
@@ -14,30 +14,30 @@ impl Eval {
     /// Gets the phase.
     #[must_use]
     #[allow(clippy::cast_possible_wrap)] // count() should never return more than 64
-    pub fn get_phase(board: &Board, phases: &[EvalNumber; 5]) -> EvalNumber {
+    pub fn get_phase(board: &Board, phases: &[Score; 5]) -> Score {
         let mut phase = 0;
 
         phase += phases[0]
             * ((*board.get_bit_board(Piece::WhitePawn) | *board.get_bit_board(Piece::BlackPawn))
-                .count()) as EvalNumber;
+                .count()) as Score;
 
         phase += phases[1]
             * ((*board.get_bit_board(Piece::WhiteKnight)
                 | *board.get_bit_board(Piece::BlackKnight))
-            .count()) as EvalNumber;
+            .count()) as Score;
 
         phase += phases[2]
             * ((*board.get_bit_board(Piece::WhiteBishop)
                 | *board.get_bit_board(Piece::BlackBishop))
-            .count()) as EvalNumber;
+            .count()) as Score;
 
         phase += phases[3]
             * ((*board.get_bit_board(Piece::WhiteRook) | *board.get_bit_board(Piece::BlackRook))
-                .count()) as EvalNumber;
+                .count()) as Score;
 
         phase += phases[4]
             * ((*board.get_bit_board(Piece::WhiteQueen) | *board.get_bit_board(Piece::BlackQueen))
-                .count()) as EvalNumber;
+                .count()) as Score;
 
         phase
     }
@@ -57,11 +57,11 @@ impl Eval {
     /// Uses the phase to interpolate between middlegame and endgame score
     #[must_use]
     pub fn calculate_score(
-        phase: EvalNumber,
-        total_phase: EvalNumber,
-        middle_game_score: EvalNumber,
-        end_game_score: EvalNumber,
-    ) -> EvalNumber {
+        phase: Score,
+        total_phase: Score,
+        middle_game_score: Score,
+        end_game_score: Score,
+    ) -> Score {
         let middle_game_phase = phase.min(total_phase);
         let end_game_phase = total_phase - middle_game_phase;
         (middle_game_score * middle_game_phase + end_game_score * end_game_phase) / total_phase
@@ -71,7 +71,7 @@ impl Eval {
     pub fn raw_evaluate_with_parameters(
         piece_square_tables: &PieceSquareTable,
         board: &Board,
-    ) -> (EvalNumber, EvalNumber) {
+    ) -> (Score, Score) {
         let mut total_middle_game_score = 0;
         let mut total_end_game_score = 0;
 
@@ -110,9 +110,9 @@ impl Eval {
     #[must_use]
     pub fn evaluate_with_parameters(
         piece_square_tables: &PieceSquareTable,
-        phases: &[EvalNumber; 5],
+        phases: &[Score; 5],
         board: &Board,
-    ) -> EvalNumber {
+    ) -> Score {
         #[rustfmt::skip]
         let total_phase = {
             phases[0] * 16
@@ -135,7 +135,7 @@ impl Eval {
 
     /// Returns an estimated score of the position for the side playing.
     #[must_use]
-    pub fn evaluate(board: &Board) -> EvalNumber {
+    pub fn evaluate(board: &Board) -> Score {
         Self::evaluate_with_parameters(
             &eval_data::PIECE_SQUARE_TABLE,
             &eval_data::PHASE_WEIGHTS,
@@ -144,7 +144,7 @@ impl Eval {
     }
 
     #[must_use]
-    pub fn raw_evaluate(board: &Board) -> (EvalNumber, EvalNumber) {
+    pub fn raw_evaluate(board: &Board) -> (Score, Score) {
         Self::raw_evaluate_with_parameters(&eval_data::PIECE_SQUARE_TABLE, board)
     }
 }

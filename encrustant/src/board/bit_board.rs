@@ -77,10 +77,10 @@ impl BitBoard {
     pub const FULL: Self = Self(!0);
 
     /// A bit board with only light squares set.
-    pub const LIGHT_SQUARES: Self = Self(0x55AA55AA55AA55AA);
+    pub const LIGHT_SQUARES: Self = Self(0x55AA_55AA_55AA_55AA);
 
     /// A bit board with only dark squares set.
-    pub const DARK_SQUARES: Self = Self(0xAA55AA55AA55AA55);
+    pub const DARK_SQUARES: Self = Self(0xAA55_AA55_AA55_AA55);
 
     /// Bit board from a 64 bit number.
     #[must_use]

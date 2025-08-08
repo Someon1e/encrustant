@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use crate::{evaluation::eval_data::EvalNumber, timer::Time};
+use crate::{evaluation::eval_data::Score, timer::Time};
 
 use super::{IMMEDIATE_CHECKMATE_SCORE, Ply, Search, search_params::Tunable};
 
@@ -223,7 +223,7 @@ impl<'a> TimeManager<'a> {
     pub fn soft_stop(
         &self,
         node_count: u64,
-        best_score: EvalNumber,
+        best_score: Score,
         best_move_stability: Ply,
         parameters: Tunable,
     ) -> bool {
@@ -243,7 +243,7 @@ impl<'a> TimeManager<'a> {
 
         if let Some(ply) = self.mated_in {
             if Search::score_is_checkmate(best_score)
-                && EvalNumber::from(ply) == IMMEDIATE_CHECKMATE_SCORE - best_score.abs()
+                && Score::from(ply) == IMMEDIATE_CHECKMATE_SCORE - best_score.abs()
             {
                 return true;
             }

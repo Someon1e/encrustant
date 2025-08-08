@@ -145,7 +145,7 @@ fn search(
 
     let (depth, evaluation) =
         search.iterative_deepening(&time_manager, &mut |depth_info: DepthSearchInfo| {
-            try_update(&depth_info.best.0);
+            try_update(depth_info.best.0);
             output_search(out, &depth_info, search_start.milliseconds());
         });
 

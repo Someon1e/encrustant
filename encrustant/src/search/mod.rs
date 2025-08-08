@@ -19,12 +19,13 @@ use crate::{
     board::{Board, game_state::GameState, piece::Piece, square::Square},
     evaluation::{
         Eval,
-        eval_data::{self, EvalNumber},
+        eval_data::{self, Score},
     },
     move_generator::{
         MoveGenerator,
         move_data::{Flag, Move},
     },
+    search::move_ordering::{ContinuationHistory, CorrectionHistory},
 };
 
 use self::{
@@ -37,9 +38,9 @@ use self::{
 pub type Ply = u8;
 
 /// Score of having checkmated the opponent.
-pub const IMMEDIATE_CHECKMATE_SCORE: EvalNumber = 70000;
+pub const IMMEDIATE_CHECKMATE_SCORE: Score = 70000;
 
-const CHECKMATE_SCORE: EvalNumber = IMMEDIATE_CHECKMATE_SCORE - (Ply::MAX as EvalNumber);
+const CHECKMATE_SCORE: Score = IMMEDIATE_CHECKMATE_SCORE - (Ply::MAX as Score);
 
 const USE_STATIC_NULL_MOVE_PRUNING: bool = true;
 const USE_NULL_MOVE_PRUNING: bool = true;
@@ -73,7 +74,7 @@ pub struct DepthSearchInfo<'a> {
     pub highest_depth: Ply,
 
     /// The best move and evaluation.
-    pub best: (&'a Pv, EvalNumber),
+    pub best: (&'a Pv, Score),
 
     /// How many times `make_move` was called in search
     pub node_count: u64,
@@ -92,8 +93,8 @@ fn history_gravity(current_value: i16, history_bonus: i32) -> i16 {
 /// Information used in search about the position.
 #[derive(Clone, Copy, Debug)]
 pub struct SearchState {
-    total_middle_game_score: EvalNumber,
-    total_end_game_score: EvalNumber,
+    total_middle_game_score: Score,
+    total_end_game_score: Score,
 
     /// Position zobrist key.
     pub position_zobrist_key: Zobrist,
@@ -122,14 +123,13 @@ pub struct Search {
     quiet_history: Box<[[i16; 64 * 64]; 2]>,
     capture_history: Box<[[[i16; 6]; 64]; 12]>, // Inner table length is 6 because outer table already gives information about the piece colour
 
-    // [previous_piece][previous_to][current_piece][current_to]
-    continuation_history: Box<[[[[i16; 64]; 6]; 64]; 12]>,
-
-    pawn_correction_history: Box<[[i16; PAWN_CORRECTION_HISTORY_LENGTH]; 2]>,
-    minor_piece_correction_history: Box<[[i16; MINOR_PIECE_CORRECTION_HISTORY_LENGTH]; 2]>,
-
-    eval_history: [EvalNumber; 256],
+    continuation_history: ContinuationHistory,
     continuation_indices: [(Piece, Square); 256],
+
+    pawn_correction_history: CorrectionHistory<PAWN_CORRECTION_HISTORY_LENGTH>,
+    minor_piece_correction_history: CorrectionHistory<MINOR_PIECE_CORRECTION_HISTORY_LENGTH>,
+
+    eval_history: [Score; 256],
 
     killer_moves: [EncodedMove; 64],
 
@@ -168,14 +168,13 @@ impl Search {
             quiet_history: vec![[0; 64 * 64]; 2].try_into().unwrap(),
             capture_history: vec![[[0; 6]; 64]; 12].try_into().unwrap(),
 
-            continuation_history: vec![[[[0; 64]; 6]; 64]; 12].try_into().unwrap(),
+            continuation_history: ContinuationHistory::new(),
 
-            pawn_correction_history: vec![[0; PAWN_CORRECTION_HISTORY_LENGTH]; 2]
-                .try_into()
-                .unwrap(),
-            minor_piece_correction_history: vec![[0; MINOR_PIECE_CORRECTION_HISTORY_LENGTH]; 2]
-                .try_into()
-                .unwrap(),
+            // Placeholder values
+            continuation_indices: [(Piece::WhitePawn, Square::from_index(0)); 256],
+
+            pawn_correction_history: CorrectionHistory::new(),
+            minor_piece_correction_history: CorrectionHistory::new(),
 
             eval_history: [0; 256],
 
@@ -186,9 +185,6 @@ impl Search {
                 pawn_zobrist_key,
                 minor_piece_zobrist_key,
             },
-
-            // Placeholder values
-            continuation_indices: [(Piece::WhitePawn, Square::from_index(0)); 256],
 
             pv: Pv::new(),
             highest_depth: 0,
@@ -279,18 +275,10 @@ impl Search {
 
     /// A new match.
     pub fn clear_cache_for_new_game(&mut self) {
-        self.pawn_correction_history[0].fill(0);
-        self.pawn_correction_history[1].fill(0);
-        self.minor_piece_correction_history[0].fill(0);
-        self.minor_piece_correction_history[1].fill(0);
+        self.pawn_correction_history.fill(0);
+        self.minor_piece_correction_history.fill(0);
 
-        for x in self.continuation_history.iter_mut() {
-            for y in x {
-                for z in y {
-                    z.fill(0);
-                }
-            }
-        }
+        self.continuation_history.fill(0);
 
         for x in self.capture_history.iter_mut() {
             for y in x.iter_mut() {
@@ -305,7 +293,7 @@ impl Search {
     }
 
     #[must_use]
-    fn quiescence_search(&mut self, mut alpha: EvalNumber, beta: EvalNumber) -> EvalNumber {
+    fn quiescence_search(&mut self, mut alpha: Score, beta: Score) -> Score {
         let pawn_index = self
             .pawn_zobrist_key()
             .modulo(PAWN_CORRECTION_HISTORY_LENGTH as u64);
@@ -444,12 +432,12 @@ impl Search {
 
     /// Returns the current minor piece (knight, bishop, king) zobrist key
     #[must_use]
-    pub fn minor_piece_zobrist_key(&self) -> Zobrist {
+    pub const fn minor_piece_zobrist_key(&self) -> Zobrist {
         self.search_state.minor_piece_zobrist_key
     }
 
     #[must_use]
-    pub fn static_evaluate(&self) -> EvalNumber {
+    pub fn static_evaluate(&self) -> Score {
         let phases = eval_data::PHASE_WEIGHTS;
         #[rustfmt::skip]
         let total_phase = {
@@ -558,7 +546,7 @@ impl Search {
             ) {
                 self.search_state
                     .minor_piece_zobrist_key
-                    .xor_piece(promotion_piece as usize, move_data.to.usize())
+                    .xor_piece(promotion_piece as usize, move_data.to.usize());
             }
         } else {
             self.evaluation_add_piece(piece, move_data.to);
@@ -754,15 +742,20 @@ impl Search {
         current_to: Square,
         bonus: i32,
     ) {
-        let entry = &mut self.continuation_history
-            [self.continuation_indices[(ply_from_root - 1) as usize].0 as usize][self
-            .continuation_indices[(ply_from_root - 1) as usize]
+        let previous_to = self.continuation_indices[(ply_from_root - 1) as usize]
             .1
-            .usize()][if self.board.white_to_move {
-            current_piece as usize
-        } else {
-            current_piece as usize - 6
-        }][current_to.usize()];
+            .usize();
+        let previous_piece = self.continuation_indices[(ply_from_root - 1) as usize].0 as usize;
+        let entry = self.continuation_history.get_mut(
+            previous_piece,
+            previous_to,
+            if self.board.white_to_move {
+                current_piece as usize
+            } else {
+                current_piece as usize - 6
+            },
+            current_to.usize(),
+        );
         *entry += history_gravity(*entry, bonus);
     }
 
@@ -776,9 +769,9 @@ impl Search {
 
         allow_null_move: bool,
 
-        mut alpha: EvalNumber,
-        beta: EvalNumber,
-    ) -> EvalNumber {
+        mut alpha: Score,
+        beta: Score,
+    ) -> Score {
         if ply_from_root > self.highest_depth {
             self.highest_depth = ply_from_root;
         }
@@ -961,7 +954,7 @@ impl Search {
             // No moves
             let score = if move_generator.is_in_check() {
                 // Checkmate
-                -IMMEDIATE_CHECKMATE_SCORE + EvalNumber::from(ply_from_root)
+                -IMMEDIATE_CHECKMATE_SCORE + Score::from(ply_from_root)
             } else {
                 // Stalemate
                 0
@@ -970,7 +963,7 @@ impl Search {
         }
 
         let mut node_type = NodeType::Alpha;
-        let (mut best_move, mut best_score) = (EncodedMove::NONE, -EvalNumber::MAX);
+        let (mut best_move, mut best_score) = (EncodedMove::NONE, -Score::MAX);
 
         let mut quiets_evaluated: Vec<EncodedMove> = Vec::new();
         let mut captures_evaluated: Vec<EncodedMove> = Vec::new();
@@ -1235,23 +1228,19 @@ impl Search {
             {
                 let error = best_score - static_eval;
 
-                Self::update_correction_history::<PAWN_CORRECTION_HISTORY_LENGTH>(
-                    &mut self.pawn_correction_history,
-                    ply_remaining,
-                    self.board.white_to_move,
-                    pawn_index,
-                    error,
-                    param!(self).pawn_correction_history_grain,
-                );
+                self.pawn_correction_history
+                    .get_mut(self.board.white_to_move, pawn_index as usize)
+                    .update(
+                        ply_remaining,
+                        error * Score::from(param!(self).pawn_correction_history_grain),
+                    );
 
-                Self::update_correction_history::<MINOR_PIECE_CORRECTION_HISTORY_LENGTH>(
-                    &mut self.minor_piece_correction_history,
-                    ply_remaining,
-                    self.board.white_to_move,
-                    minor_piece_index,
-                    error,
-                    param!(self).minor_piece_correction_history_grain,
-                );
+                self.minor_piece_correction_history
+                    .get_mut(self.board.white_to_move, minor_piece_index as usize)
+                    .update(
+                        ply_remaining,
+                        error * Score::from(param!(self).minor_piece_correction_history_grain),
+                    );
             }
         }
 
@@ -1273,7 +1262,7 @@ impl Search {
 
     /// Returns whether a score means forced checkmate.
     #[must_use]
-    pub const fn score_is_checkmate(score: EvalNumber) -> bool {
+    pub const fn score_is_checkmate(score: Score) -> bool {
         score.abs() >= CHECKMATE_SCORE
     }
 
@@ -1281,24 +1270,24 @@ impl Search {
     fn aspiration_search(
         &mut self,
         time_manager: &TimeManager,
-        mut best_score: EvalNumber,
+        mut best_score: Score,
         depth: Ply,
-    ) -> EvalNumber {
+    ) -> Score {
         if USE_ASPIRATION_WINDOWS && depth > 2 {
             let mut alpha = best_score
                 .saturating_sub(param!(self).aspiration_window_start)
-                .max(-EvalNumber::MAX);
+                .max(-Score::MAX);
             let mut beta = best_score.saturating_add(param!(self).aspiration_window_start);
             for _ in 0..param!(self).aspiration_window_count {
                 best_score = self.negamax(time_manager, depth, 0, false, alpha, beta);
                 if best_score <= alpha {
                     alpha = alpha
                         .saturating_sub(param!(self).aspiration_window_growth)
-                        .max(-EvalNumber::MAX);
-                    // -EvalNumber::MAX = -2147483647
-                    // EvalNumber::MIN = -2147483648
+                        .max(-Score::MAX);
+                    // -Score::MAX = -2147483647
+                    // Score::MIN = -2147483648
 
-                    beta = ((i64::from(alpha) + i64::from(beta)) / 2) as i32;
+                    beta = i64::midpoint(i64::from(alpha), i64::from(beta)) as i32;
                 } else if best_score >= beta {
                     beta = beta.saturating_add(param!(self).aspiration_window_growth);
                 } else {
@@ -1306,14 +1295,7 @@ impl Search {
                 }
             }
         }
-        self.negamax(
-            time_manager,
-            depth,
-            0,
-            false,
-            -EvalNumber::MAX,
-            EvalNumber::MAX,
-        )
+        self.negamax(time_manager, depth, 0, false, -Score::MAX, Score::MAX)
     }
 
     /// Repeatedly searches the board, increasing depth by one each time. Stops when `time_manager` returns `true`.
@@ -1324,9 +1306,9 @@ impl Search {
         time_manager: &TimeManager,
 
         depth_completed: &mut dyn FnMut(DepthSearchInfo),
-    ) -> (Ply, EvalNumber) {
+    ) -> (Ply, Score) {
         let mut depth = 0;
-        let mut previous_best_score = -EvalNumber::MAX;
+        let mut previous_best_score = -Score::MAX;
 
         let mut best_move_stability = 0;
         let mut previous_best_move = EncodedMove::NONE;
@@ -1402,18 +1384,17 @@ impl Search {
     }
 
     #[must_use]
-    fn get_correction(
-        &self,
-        evaluation: EvalNumber,
-        pawn_index: u64,
-        minor_piece_index: u64,
-    ) -> EvalNumber {
-        let pawn_correction = self.pawn_correction_history[usize::from(self.board.white_to_move)]
-            [pawn_index as usize]
+    fn get_correction(&self, evaluation: Score, pawn_index: u64, minor_piece_index: u64) -> Score {
+        let pawn_correction = self
+            .pawn_correction_history
+            .get(self.board.white_to_move, pawn_index as usize)
+            .0
             / param!(self).pawn_correction_history_grain;
 
-        let minor_piece_correction = self.minor_piece_correction_history
-            [usize::from(self.board.white_to_move)][minor_piece_index as usize]
+        let minor_piece_correction = self
+            .minor_piece_correction_history
+            .get(self.board.white_to_move, minor_piece_index as usize)
+            .0
             / param!(self).minor_piece_correction_history_grain;
 
         let correction = ((i32::from(pawn_correction)
@@ -1422,37 +1403,6 @@ impl Search {
                 * param!(self).minor_piece_correction_history_weight))
             / 1024;
         evaluation + correction
-    }
-
-    fn update_correction_history<const CORRECTION_HISTORY_LENGTH: usize>(
-        correction_history: &mut [[i16; CORRECTION_HISTORY_LENGTH]; 2],
-        ply_remaining: Ply,
-        white_to_move: bool,
-        index: u64,
-        error: EvalNumber,
-        grain: i16,
-    ) {
-        const CORRECTION_HISTORY_WEIGHT_SCALE: i16 = 1024;
-        const CORRECTION_HISTORY_MAX: i16 = 16384;
-
-        let mut entry = i32::from(correction_history[usize::from(white_to_move)][index as usize]);
-        let scaled_error = error * i32::from(grain);
-        let new_weight = i32::min(
-            i32::from(ply_remaining) * i32::from(ply_remaining) + 2 * i32::from(ply_remaining) + 1,
-            128,
-        );
-        assert!(new_weight <= i32::from(CORRECTION_HISTORY_WEIGHT_SCALE));
-
-        entry = (entry * (i32::from(CORRECTION_HISTORY_WEIGHT_SCALE) - new_weight)
-            + scaled_error * new_weight)
-            / i32::from(CORRECTION_HISTORY_WEIGHT_SCALE);
-        entry = i32::clamp(
-            entry,
-            i32::from(-CORRECTION_HISTORY_MAX),
-            i32::from(CORRECTION_HISTORY_MAX),
-        );
-
-        correction_history[usize::from(white_to_move)][index as usize] = entry as i16;
     }
 
     #[must_use]
@@ -1473,7 +1423,7 @@ impl Search {
 mod tests {
     use crate::{
         board::Board,
-        evaluation::{Eval, eval_data::EvalNumber},
+        evaluation::{Eval, eval_data::Score},
         search::{Search, transposition::megabytes_to_capacity},
     };
 
@@ -1492,7 +1442,7 @@ mod tests {
                 #[cfg(feature = "spsa")]
                 crate::search::search_params::DEFAULT_TUNABLES,
             )
-            .quiescence_search(-EvalNumber::MAX, EvalNumber::MAX),
+            .quiescence_search(-Score::MAX, Score::MAX),
             Eval::evaluate(&quiet)
         );
     }

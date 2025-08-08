@@ -1,13 +1,13 @@
 //! Transposition table utilities.
 
-use super::{CHECKMATE_SCORE, Ply, encoded_move::EncodedMove, eval_data::EvalNumber};
+use super::{CHECKMATE_SCORE, Ply, encoded_move::EncodedMove, eval_data::Score};
 
 #[derive(Clone, Copy)]
 pub(super) struct NodeValue {
     pub zobrist_key_32: u32,
     pub ply_remaining: Ply,
     pub node_type: NodeType,
-    pub value: EvalNumber,
+    pub value: Score,
 
     /// The best move found.
     pub transposition_move: EncodedMove,
@@ -34,22 +34,22 @@ pub const fn megabytes_to_capacity(megabytes: usize) -> usize {
 }
 
 #[must_use]
-pub fn normalise_mate_score(score: EvalNumber, ply_from_root: Ply) -> EvalNumber {
+pub fn normalise_mate_score(score: Score, ply_from_root: Ply) -> Score {
     if score >= CHECKMATE_SCORE {
-        score + EvalNumber::from(ply_from_root)
+        score + Score::from(ply_from_root)
     } else if score <= -CHECKMATE_SCORE {
-        score - EvalNumber::from(ply_from_root)
+        score - Score::from(ply_from_root)
     } else {
         score
     }
 }
 
 #[must_use]
-pub fn retrieve_mate_score(score: EvalNumber, ply_from_root: Ply) -> EvalNumber {
+pub fn retrieve_mate_score(score: Score, ply_from_root: Ply) -> Score {
     if score >= CHECKMATE_SCORE {
-        score - EvalNumber::from(ply_from_root)
+        score - Score::from(ply_from_root)
     } else if score <= -CHECKMATE_SCORE {
-        score + EvalNumber::from(ply_from_root)
+        score + Score::from(ply_from_root)
     } else {
         score
     }

@@ -17,12 +17,16 @@ pub enum FenParseErr {
     /// An invalid piece character was encountered in the position section of the FEN string.
     InvalidPiece,
 
+    /// A king or both kings are missing.
     MissingKing,
 
+    /// There are more than 2 kings.
     MultipleKings,
 
+    /// The kings are adjacent.
     TouchingKings,
 
+    /// There is a pawn on the rank where it should have promoted.
     PawnOnPromotionRank,
 
     /// An invalid digit was encountered in the position section (e.g., a number greater than 8 or incorrect rank structure).
@@ -108,13 +112,13 @@ impl Board {
                         if white_king_square.is_some() {
                             return Err(FenParseErr::MultipleKings);
                         }
-                        white_king_square = Some(square)
+                        white_king_square = Some(square);
                     }
                     Piece::BlackKing => {
                         if black_king_square.is_some() {
                             return Err(FenParseErr::MultipleKings);
                         }
-                        black_king_square = Some(square)
+                        black_king_square = Some(square);
                     }
                     Piece::WhitePawn => {
                         if BitBoard::RANK_8.get(&square) {

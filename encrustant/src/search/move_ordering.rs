@@ -1,6 +1,7 @@
 use core::mem::MaybeUninit;
 
 use crate::{
+    evaluation::eval_data::Score,
     move_generator::{
         MoveGenerator,
         move_data::{Flag, Move},
@@ -9,6 +10,99 @@ use crate::{
 };
 
 use super::{Search, encoded_move::EncodedMove};
+
+pub struct ContinuationHistory(
+    // [previous_piece][previous_to][current_piece][current_to]
+    Box<[[[[i16; 64]; 6]; 64]; 12]>,
+);
+impl ContinuationHistory {
+    pub fn new() -> Self {
+        Self(vec![[[[0; 64]; 6]; 64]; 12].try_into().unwrap())
+    }
+
+    pub fn fill(&mut self, value: i16) {
+        for x in self.0.iter_mut() {
+            for y in x {
+                for z in y {
+                    z.fill(value);
+                }
+            }
+        }
+    }
+
+    pub fn get(
+        &self,
+        previous_piece: usize,
+        previous_to: usize,
+        current_piece: usize,
+        current_to: usize,
+    ) -> i16 {
+        self.0[previous_piece][previous_to][current_piece][current_to]
+    }
+
+    pub fn get_mut(
+        &mut self,
+        previous_piece: usize,
+        previous_to: usize,
+        current_piece: usize,
+        current_to: usize,
+    ) -> &mut i16 {
+        &mut self.0[previous_piece][previous_to][current_piece][current_to]
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CorrectionHistoryEntry(pub i16);
+
+impl CorrectionHistoryEntry {
+    const CORRECTION_HISTORY_WEIGHT_SCALE: i16 = 1024;
+    const CORRECTION_HISTORY_MAX: i16 = 16384;
+
+    pub fn update(&mut self, ply_remaining: Ply, scaled_error: Score) {
+        let new_weight = i32::min(
+            i32::from(ply_remaining) * i32::from(ply_remaining) + 2 * i32::from(ply_remaining) + 1,
+            128,
+        );
+        assert!(new_weight <= i32::from(Self::CORRECTION_HISTORY_WEIGHT_SCALE));
+
+        let new_value = (i32::from(self.0)
+            * (i32::from(Self::CORRECTION_HISTORY_WEIGHT_SCALE) - new_weight)
+            + scaled_error * new_weight)
+            / i32::from(Self::CORRECTION_HISTORY_WEIGHT_SCALE);
+        let clamped = i32::clamp(
+            new_value,
+            i32::from(-Self::CORRECTION_HISTORY_MAX),
+            i32::from(Self::CORRECTION_HISTORY_MAX),
+        );
+
+        *self = Self(clamped as i16);
+    }
+}
+
+pub struct CorrectionHistory<const LEN: usize>([[CorrectionHistoryEntry; LEN]; 2]);
+
+impl<const LEN: usize> CorrectionHistory<LEN> {
+    pub fn new() -> Self {
+        Self(
+            vec![[CorrectionHistoryEntry(0); LEN]; 2]
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    pub fn get(&self, white_to_move: bool, index: usize) -> CorrectionHistoryEntry {
+        self.0[usize::from(white_to_move)][index]
+    }
+
+    pub fn get_mut(&mut self, white_to_move: bool, index: usize) -> &mut CorrectionHistoryEntry {
+        &mut self.0[usize::from(white_to_move)][index]
+    }
+
+    pub fn fill(&mut self, value: i16) {
+        self.0[0].fill(CorrectionHistoryEntry(value));
+        self.0[1].fill(CorrectionHistoryEntry(value));
+    }
+}
 
 pub type MoveGuessNum = i32;
 
@@ -93,17 +187,22 @@ impl MoveOrderer {
             );
 
             if ply_from_root != 0 {
-                score += MoveGuessNum::from(
-                    search.continuation_history
-                        [search.continuation_indices[(ply_from_root - 1) as usize].0 as usize]
-                        [search.continuation_indices[(ply_from_root - 1) as usize]
-                            .1
-                            .usize()][if search.board.white_to_move {
+                let previous_to = search.continuation_indices[(ply_from_root - 1) as usize]
+                    .1
+                    .usize();
+                let previous_piece =
+                    search.continuation_indices[(ply_from_root - 1) as usize].0 as usize;
+
+                score += MoveGuessNum::from(search.continuation_history.get(
+                    previous_piece,
+                    previous_to,
+                    if search.board.white_to_move {
                         moving_piece as usize
                     } else {
                         moving_piece as usize - 6
-                    }][moving_to.usize()],
-                );
+                    },
+                    moving_to.usize(),
+                ));
             }
         }
         score

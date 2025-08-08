@@ -7,7 +7,7 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-criterion2 = "3.0.0"
+criterion2 = "3.0.1"
 
 [[bench]]
 name = "perft"

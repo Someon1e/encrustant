@@ -87,9 +87,9 @@ pub const KING_MOVES_AT_SQUARE: [BitBoard; 64] = {
 pub const fn get_between_rays(from: Square, to: Square) -> BitBoard {
     const fn compute_ray_between(from: usize, to: usize) -> BitBoard {
         const M1: u64 = !0;
-        const A2A7: u64 = 0x0001010101010100;
-        const B2G7: u64 = 0x0040201008040200;
-        const H1B7: u64 = 0x0002040810204080;
+        const A2A7: u64 = 0x0001_0101_0101_0100;
+        const B2G7: u64 = 0x0040_2010_0804_0200;
+        const H1B7: u64 = 0x0002_0408_1020_4080;
 
         let btwn = (M1 << from) ^ (M1 << to);
         let file = (to & 7) as isize - (from & 7) as isize;
