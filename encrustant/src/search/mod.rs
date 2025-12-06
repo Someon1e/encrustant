@@ -488,6 +488,9 @@ impl Search {
 
         ply_remaining: Ply,
         ply_from_root: Ply,
+
+        mut alpha: Score,
+        beta: Score,
     ) -> Score {
         if ply_from_root > self.highest_depth {
             self.highest_depth = ply_from_root;
@@ -503,6 +506,7 @@ impl Search {
         let mut best_score = -Score::MAX;
         let mut move_count = 0;
 
+        let mut cutoff = false;
         move_generator.generate(
             |move_data| {
                 move_count += 1;
@@ -511,17 +515,35 @@ impl Search {
                     return;
                 }
 
+                if cutoff {
+                    return;
+                }
+
                 self.node_count += 1;
                 let old_state = self.make_move(&move_data);
 
-                let score = -self.negamax(time_manager, ply_remaining - 1, ply_from_root + 1);
+                let score = -self.negamax(
+                    time_manager,
+                    ply_remaining - 1,
+                    ply_from_root + 1,
+                    -beta,
+                    -alpha,
+                );
 
                 self.unmake_move(&move_data, &old_state);
 
                 if score > best_score {
-                    self.pv
-                        .update_move(ply_from_root, EncodedMove::new(move_data));
                     best_score = score;
+
+                    if score > alpha {
+                        alpha = score;
+                        self.pv
+                            .update_move(ply_from_root, EncodedMove::new(move_data));
+
+                        if score >= beta {
+                            cutoff = true;
+                        }
+                    }
                 }
             },
             false,
@@ -569,7 +591,7 @@ impl Search {
 
         loop {
             depth += 1;
-            let best_score = self.negamax(time_manager, depth, 0);
+            let best_score = self.negamax(time_manager, depth, 0, -Score::MAX, Score::MAX);
 
             if time_manager.hard_stop_iterative_deepening(depth, self.node_count) {
                 // Must stop now.
