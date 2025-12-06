@@ -590,6 +590,8 @@ fn bench() {
     let mut total_nodes: u64 = 0;
     let time = Time::now();
     for (position, depth) in SEARCH_POSITIONS {
+        let depth = 3; // TODO: remove
+
         let board = Board::from_fen(position).unwrap();
         search.new_board(board);
         search.clear_cache_for_new_game();
