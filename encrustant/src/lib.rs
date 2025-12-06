@@ -1,10 +1,5 @@
 //! Chess move generator and engine
 
-// For ARM prefetching
-#![cfg_attr(
-    any(target_arch = "aarch64", target_arch = "arm64ec"),
-    feature(stdarch_aarch64_prefetch, core_intrinsics)
-)]
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
 #![warn(clippy::nursery)]

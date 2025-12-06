@@ -12,7 +12,7 @@ use std::{
 use core::cell::RefCell;
 use encrustant::{
     board::Board,
-    search::{Search, time_manager::TimeManager, transposition::megabytes_to_capacity},
+    search::{Search, time_manager::TimeManager},
     timer::Time,
     uci::{GoParameters, SpinU16, UCIProcessor},
 };
@@ -582,7 +582,7 @@ fn bench() {
 
     let mut search = Search::new(
         Board::from_fen(Board::START_POSITION_FEN).unwrap(),
-        megabytes_to_capacity(32),
+        0, // megabytes_to_capacity(32),
         #[cfg(feature = "spsa")]
         UCI_PROCESSOR.with(|uci_processor| uci_processor.borrow().tunables),
     );

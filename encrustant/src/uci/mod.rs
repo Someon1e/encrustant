@@ -17,7 +17,6 @@ use crate::{
     board::{Board, square::Square},
     move_generator::move_data::Flag,
     perft::perft_root,
-    search::transposition::megabytes_to_capacity,
     timer::Time,
 };
 
@@ -202,7 +201,7 @@ const TUNABLE_RANGES: TunableRange = TunableRange {
 impl UCIProcessor {
     pub fn new(out: fn(&str), hash_option: SpinU16) -> Self {
         let megabytes = hash_option.default as usize;
-        let transposition_capacity = megabytes_to_capacity(megabytes);
+        let transposition_capacity = 0; // megabytes_to_capacity(megabytes);
 
         Self {
             fen: None,
@@ -380,8 +379,8 @@ uciok",
             "hash" => {
                 let megabytes = value.expect("Missing value").parse().unwrap();
                 assert!(self.hash_option.range.contains(&megabytes));
-
-                self.set_transposition_capacity(megabytes_to_capacity(megabytes.into()));
+                let capacity = 0; // megabytes_to_capacity(megabytes.into());
+                self.set_transposition_capacity(capacity);
             }
             "threads" => {
                 let threads: u16 = value.expect("Missing value").parse().unwrap();

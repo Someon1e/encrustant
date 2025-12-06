@@ -84,7 +84,7 @@ fn search(
         search
     };
     for (from, to, promotion) in &moves.take().unwrap() {
-        search.make_move_repetition::<false>(&decode_move(search.board(), *from, *to, *promotion));
+        search.make_move(&decode_move(search.board(), *from, *to, *promotion));
     }
 
     let real_time = {
