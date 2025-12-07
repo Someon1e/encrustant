@@ -2,8 +2,10 @@
 
 pub mod encoded_move;
 pub mod pv;
+mod repetition_table;
 pub mod search_params;
 pub mod time_manager;
+pub mod zobrist;
 
 use pv::Pv;
 use time_manager::TimeManager;
@@ -18,6 +20,7 @@ use crate::{
         MoveGenerator,
         move_data::{Flag, Move},
     },
+    search::{repetition_table::RepetitionTable, zobrist::Zobrist},
 };
 
 use self::encoded_move::EncodedMove;
@@ -65,6 +68,9 @@ pub struct DepthSearchInfo<'a> {
 pub struct SearchState {
     total_middle_game_score: Score,
     total_end_game_score: Score,
+
+    /// Position zobrist key.
+    pub position_zobrist_key: Zobrist,
 }
 
 /// A combination of `GameState` and `SearchState`.
@@ -76,6 +82,8 @@ pub struct ExtendedState {
 /// Looks for the best outcome in a position.
 pub struct Search {
     board: Board,
+
+    pub repetition_table: RepetitionTable,
 
     search_state: SearchState,
 
@@ -97,13 +105,17 @@ impl Search {
         #[cfg(feature = "spsa")] tunable: crate::search::search_params::Tunable,
     ) -> Self {
         let (total_middle_game_score, total_end_game_score) = Eval::raw_evaluate(&board);
+        let position_zobrist_key = Zobrist::compute(&board);
 
         Self {
             board,
 
+            repetition_table: RepetitionTable::new(),
+
             search_state: SearchState {
                 total_middle_game_score,
                 total_end_game_score,
+                position_zobrist_key,
             },
 
             pv: Pv::new(),
@@ -144,6 +156,12 @@ impl Search {
 
     /// A new match.
     pub fn clear_cache_for_new_game(&mut self) {}
+
+    /// Returns the current position zobrist key
+    #[must_use]
+    pub const fn position_zobrist_key(&self) -> Zobrist {
+        self.search_state.position_zobrist_key
+    }
 
     fn evaluation_remove_piece(&mut self, piece: Piece, square: Square) {
         let is_white = match piece {
@@ -244,17 +262,20 @@ impl Search {
         static_eval
     }
 
-    /// Makes a move and updates the evaluation.
+    /// Make a move and update the incremental evaluation and hashes
+
     pub fn make_move(&mut self, move_data: &Move) -> ExtendedState {
+        debug_assert!(Zobrist::compute(&self.board) == self.position_zobrist_key());
+
         let search_state = self.search_state;
 
-        //self.search_state.position_zobrist_key.flip_side_to_move();
+        self.search_state.position_zobrist_key.flip_side_to_move();
 
         let piece = self.board.friendly_piece_at(move_data.from).unwrap();
 
-        //self.search_state
-        //    .position_zobrist_key
-        //    .xor_piece(piece as usize, move_data.from.usize());
+        self.search_state
+            .position_zobrist_key
+            .xor_piece(piece as usize, move_data.from.usize());
         match piece {
             Piece::WhitePawn | Piece::BlackPawn => {
                 //self.search_state
@@ -279,9 +300,9 @@ impl Search {
 
         let flag = move_data.flag;
 
-        //self.search_state
-        //    .position_zobrist_key
-        //    .xor_castling_rights(&self.board.game_state.castling_rights);
+        self.search_state
+            .position_zobrist_key
+            .xor_castling_rights(&self.board.game_state.castling_rights);
         {
             let mut castling_rights = self.board.game_state.castling_rights;
             if piece == Piece::WhiteKing {
@@ -303,32 +324,32 @@ impl Search {
             if move_data.from == Square::from_index(63) || move_data.to == Square::from_index(63) {
                 castling_rights.unset_black_king_side();
             }
-            //self.search_state
-            //    .position_zobrist_key
-            //    .xor_castling_rights(&castling_rights);
+            self.search_state
+                .position_zobrist_key
+                .xor_castling_rights(&castling_rights);
         }
 
         let promotion_piece = flag.get_promotion_piece(self.board.white_to_move);
 
         if let Some(promotion_piece) = promotion_piece {
             self.evaluation_add_piece(promotion_piece, move_data.to);
-            //self.search_state
-            //    .position_zobrist_key
-            //    .xor_piece(promotion_piece as usize, move_data.to.usize());
+            self.search_state
+                .position_zobrist_key
+                .xor_piece(promotion_piece as usize, move_data.to.usize());
 
-            //if matches!(
-            //    promotion_piece,
-            //    Piece::BlackKnight | Piece::WhiteKnight | Piece::BlackBishop | Piece::WhiteBishop
-            //) {
-            //    self.search_state
-            //        .minor_piece_zobrist_key
-            //        .xor_piece(promotion_piece as usize, move_data.to.usize());
-            //}
+            if matches!(
+                promotion_piece,
+                Piece::BlackKnight | Piece::WhiteKnight | Piece::BlackBishop | Piece::WhiteBishop
+            ) {
+                //self.search_state
+                //    .minor_piece_zobrist_key
+                //    .xor_piece(promotion_piece as usize, move_data.to.usize());
+            }
         } else {
             self.evaluation_add_piece(piece, move_data.to);
-            //self.search_state
-            //    .position_zobrist_key
-            //    .xor_piece(piece as usize, move_data.to.usize());
+            self.search_state
+                .position_zobrist_key
+                .xor_piece(piece as usize, move_data.to.usize());
 
             match piece {
                 Piece::WhitePawn | Piece::BlackPawn => {
@@ -351,9 +372,9 @@ impl Search {
         }
 
         if let Some(en_passant_square) = self.board.game_state.en_passant_square {
-            //self.search_state
-            //    .position_zobrist_key
-            //    .xor_en_passant(&en_passant_square);
+            self.search_state
+                .position_zobrist_key
+                .xor_en_passant(&en_passant_square);
         }
         match flag {
             Flag::PawnTwoUp => {
@@ -361,9 +382,9 @@ impl Search {
                     move_data
                         .from
                         .up(if self.board.white_to_move { 1 } else { -1 });
-                //self.search_state
-                //    .position_zobrist_key
-                //    .xor_en_passant(&en_passant_square);
+                self.search_state
+                    .position_zobrist_key
+                    .xor_en_passant(&en_passant_square);
             }
             Flag::Castle => {
                 let is_king_side = move_data.to.file() == 6;
@@ -381,12 +402,12 @@ impl Search {
                 self.evaluation_remove_piece(rook, rook_from);
                 self.evaluation_add_piece(rook, rook_to);
 
-                //self.search_state
-                //    .position_zobrist_key
-                //    .xor_piece(rook as usize, rook_from.usize());
-                //self.search_state
-                //    .position_zobrist_key
-                //    .xor_piece(rook as usize, rook_to.usize());
+                self.search_state
+                    .position_zobrist_key
+                    .xor_piece(rook as usize, rook_from.usize());
+                self.search_state
+                    .position_zobrist_key
+                    .xor_piece(rook as usize, rook_to.usize());
             }
             Flag::EnPassant => {
                 let capture_position = self
@@ -402,9 +423,9 @@ impl Search {
                 };
 
                 self.evaluation_remove_piece(captured, capture_position);
-                //self.search_state
-                //    .position_zobrist_key
-                //    .xor_piece(captured as usize, capture_position.usize());
+                self.search_state
+                    .position_zobrist_key
+                    .xor_piece(captured as usize, capture_position.usize());
                 //self.search_state
                 //    .pawn_zobrist_key
                 //    .xor_piece(captured as usize, capture_position.usize());
@@ -412,30 +433,30 @@ impl Search {
             _ => {
                 if let Some(captured) = self.board.enemy_piece_at(move_data.to) {
                     self.evaluation_remove_piece(captured, move_data.to);
-                    //self.search_state
-                    //    .position_zobrist_key
-                    //    .xor_piece(captured as usize, move_data.to.usize());
+                    self.search_state
+                        .position_zobrist_key
+                        .xor_piece(captured as usize, move_data.to.usize());
 
-                    //match captured {
-                    //    Piece::WhitePawn | Piece::BlackPawn => {
-                    //        self.search_state
-                    //            .pawn_zobrist_key
-                    //            .xor_piece(captured as usize, move_data.to.usize());
-                    //    }
+                    match captured {
+                        Piece::WhitePawn | Piece::BlackPawn => {
+                            //self.search_state
+                            //    .pawn_zobrist_key
+                            //    .xor_piece(captured as usize, move_data.to.usize());
+                        }
 
-                    //    Piece::BlackKnight
-                    //    | Piece::WhiteKnight
-                    //    | Piece::BlackBishop
-                    //    | Piece::WhiteBishop
-                    //    | Piece::WhiteKing
-                    //    | Piece::BlackKing => {
-                    //        self.search_state
-                    //            .minor_piece_zobrist_key
-                    //            .xor_piece(captured as usize, move_data.to.usize());
-                    //    }
+                        Piece::BlackKnight
+                        | Piece::WhiteKnight
+                        | Piece::BlackBishop
+                        | Piece::WhiteBishop
+                        | Piece::WhiteKing
+                        | Piece::BlackKing => {
+                            //self.search_state
+                            //    .minor_piece_zobrist_key
+                            //    .xor_piece(captured as usize, move_data.to.usize());
+                        }
 
-                    //    _ => {}
-                    //}
+                        _ => {}
+                    }
                 }
             }
         }
@@ -469,16 +490,22 @@ impl Search {
 
         let game_state = self.board.make_move(move_data);
 
+        //debug_assert!(Zobrist::pawn_key(&self.board) == self.pawn_zobrist_key());
+        //debug_assert!(Zobrist::minor_piece_key(&self.board) == self.minor_piece_zobrist_key());
+        debug_assert!(Zobrist::compute(&self.board) == self.position_zobrist_key());
+
         ExtendedState {
             game_state,
             search_state,
         }
     }
 
-    /// Unmakes a move and updates the evaluation.
+    /// Unmake a move and update the incremental evaluation and hashes
     pub fn unmake_move(&mut self, move_data: &Move, old_state: &ExtendedState) {
         self.search_state = old_state.search_state;
         self.board.unmake_move(move_data, &old_state.game_state);
+
+        debug_assert!(Zobrist::compute(&self.board) == self.position_zobrist_key());
     }
 
     fn negamax(
@@ -497,6 +524,18 @@ impl Search {
         }
 
         self.pv.set_pv_length(ply_from_root, ply_from_root);
+
+        let zobrist_key = self.position_zobrist_key();
+
+        if ply_from_root != 0 {
+            // Check for repetition
+            if self
+                .repetition_table
+                .contains(zobrist_key, self.board.game_state.half_move_clock)
+            {
+                return 0;
+            }
+        }
 
         if ply_remaining == 0 {
             return self.static_evaluate();
@@ -520,6 +559,7 @@ impl Search {
                 }
 
                 self.node_count += 1;
+                self.repetition_table.push(self.position_zobrist_key());
                 let old_state = self.make_move(&move_data);
 
                 let score = -self.negamax(
@@ -531,6 +571,7 @@ impl Search {
                 );
 
                 self.unmake_move(&move_data, &old_state);
+                assert_eq!(self.repetition_table.pop(), self.position_zobrist_key());
 
                 if score > best_score {
                     best_score = score;

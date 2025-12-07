@@ -84,6 +84,7 @@ fn search(
         search
     };
     for (from, to, promotion) in &moves.take().unwrap() {
+        search.repetition_table.push(search.position_zobrist_key());
         search.make_move(&decode_move(search.board(), *from, *to, *promotion));
     }
 
